@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+papers/
+annotations.db
+.DS_Store
