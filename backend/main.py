@@ -502,22 +502,46 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
         dest.write_bytes(legacy.read_bytes() if legacy.exists() else data)
     disk_fn = dest.name
 
-    # ── Step 2: discover actual DB columns ──────────────────────────────
-    cols = _papers_columns()
-    logger.error(f"upload: papers columns in DB = {sorted(cols)}")
+    # ── Step 2: discover actual DB columns + NOT NULL constraints ──────
+    pragma_conn = get_db()
+    pragma_rows = pragma_conn.execute("PRAGMA table_info(papers)").fetchall()
+    pragma_conn.close()
+    col_info = {r["name"]: {"notnull": r["notnull"], "dflt": r["dflt_value"]} for r in pragma_rows}
+    cols = set(col_info.keys())
+    logger.error(f"upload: schema = {[(n, col_info[n]) for n in sorted(cols)]}")
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    # Known legacy NOT NULL columns and sensible fill values
+    LEGACY_DEFAULTS = {
+        "file_path":   disk_fn,
+        "upload_time": now_str,
+        "created_at":  now_str,
+        "timestamp":   now_str,
+    }
 
     conn = get_db()
     try:
-        # ── Step 3: build INSERT from available columns only ─────────────
-        insert_cols  = ["filename"]
-        insert_vals  = [file.filename]
+        # ── Step 3: build INSERT supplying ALL NOT NULL / no-default cols ──
+        insert_cols = ["filename"]
+        insert_vals = [file.filename]
         if "sha256"        in cols: insert_cols.append("sha256");        insert_vals.append(sha)
         if "user_id"       in cols: insert_cols.append("user_id");       insert_vals.append(uid)
         if "disk_filename" in cols: insert_cols.append("disk_filename"); insert_vals.append(disk_fn)
 
+        # Add any other NOT NULL / no-default columns using legacy fallbacks
+        for col, info in col_info.items():
+            if col in insert_cols or col == "id":
+                continue
+            if info["notnull"] and info["dflt"] is None:
+                fallback = LEGACY_DEFAULTS.get(col, "")
+                insert_cols.append(col)
+                insert_vals.append(fallback)
+                logger.error(f"upload: adding NOT NULL col '{col}' = '{fallback}'")
+
         placeholders = ",".join("?" * len(insert_cols))
         insert_sql   = f"INSERT OR IGNORE INTO papers ({','.join(insert_cols)}) VALUES ({placeholders})"
-        logger.error(f"upload: executing {insert_sql} params={insert_vals[:3]}")
+        logger.error(f"upload: sql={insert_sql} params={insert_vals[:5]}")
 
         conn.execute(insert_sql, insert_vals)
         rows_inserted = conn.execute("SELECT changes()").fetchone()[0]
