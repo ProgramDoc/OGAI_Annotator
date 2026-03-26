@@ -394,7 +394,7 @@ def list_projects(ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, name, created_at FROM projects WHERE user_id=? ORDER BY created_at ASC",
+        "SELECT id, name FROM projects WHERE user_id=? ORDER BY id ASC",
         (user["id"],),
     ).fetchall()
     conn.close()
@@ -454,7 +454,7 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
     papers = conn.execute(
-        "SELECT id, filename, project_id FROM papers WHERE user_id=? ORDER BY created_at DESC",
+        "SELECT id, filename, project_id FROM papers WHERE user_id=? ORDER BY id DESC",
         (user["id"],),
     ).fetchall()
     result = []
