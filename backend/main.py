@@ -131,11 +131,12 @@ def init_db() -> None:
         """)
 
         for migration in [
-            "ALTER TABLE papers      ADD COLUMN sha256      TEXT",
-            "ALTER TABLE papers      ADD COLUMN user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE",
-            "ALTER TABLE papers      ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL",
-            "ALTER TABLE papers      ADD COLUMN created_at TEXT DEFAULT (datetime('now'))",
-            "ALTER TABLE projects    ADD COLUMN user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE",
+            "ALTER TABLE papers      ADD COLUMN sha256        TEXT",
+            "ALTER TABLE papers      ADD COLUMN user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE",
+            "ALTER TABLE papers      ADD COLUMN project_id    INTEGER REFERENCES projects(id) ON DELETE SET NULL",
+            "ALTER TABLE papers      ADD COLUMN created_at    TEXT DEFAULT (datetime('now'))",
+            "ALTER TABLE papers      ADD COLUMN disk_filename TEXT",
+            "ALTER TABLE projects    ADD COLUMN user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE",
             "ALTER TABLE annotations ADD COLUMN correction_notes          TEXT",
             "ALTER TABLE annotations ADD COLUMN corrections_json          TEXT",
             "ALTER TABLE annotations ADD COLUMN pipeline_predictions_json TEXT",
@@ -477,88 +478,91 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
     data = await file.read()
     sha  = hashlib.sha256(data).hexdigest()
 
-    # Write PDF to user-scoped path so get_pdf always finds it
+    # Write PDF to user-scoped path on disk
     dest = PAPERS_DIR / f"{sha[:16]}_{user['id']}.pdf"
     if not dest.exists():
         legacy = PAPERS_DIR / f"{sha[:16]}.pdf"
         dest.write_bytes(legacy.read_bytes() if legacy.exists() else data)
+    disk_filename = dest.name  # e.g. "abc123def456_1.pdf"
 
     conn = get_db()
-    with conn:
-        # Try a clean INSERT first.
-        # If IntegrityError, the row already exists (legacy UNIQUE(sha256) or duplicate).
-        # Claim it for this user if it is currently unclaimed (user_id IS NULL).
-        try:
-            conn.execute(
-                "INSERT INTO papers (filename, sha256, user_id) VALUES (?,?,?)",
-                (file.filename, sha, user["id"]),
-            )
-        except sqlite3.IntegrityError:
-            conn.execute(
-                "UPDATE papers SET user_id=?, filename=? "
-                "WHERE sha256=? AND (user_id IS NULL OR user_id=?)",
-                (user["id"], file.filename, sha, user["id"]),
-            )
+    try:
+        conn.execute(
+            "INSERT INTO papers (filename, sha256, user_id, disk_filename) VALUES (?,?,?,?)",
+            (file.filename, sha, user["id"], disk_filename),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Row exists (old UNIQUE(sha256) constraint) — claim it for this user if unclaimed
+        conn.execute(
+            "UPDATE papers SET user_id=COALESCE(user_id,?), filename=?, disk_filename=COALESCE(disk_filename,?) "
+            "WHERE sha256=?",
+            (user["id"], file.filename, disk_filename, sha),
+        )
         conn.commit()
 
-    # Fetch the row — user-scoped first, then bare sha fallback for very old DBs
-    paper = (
-        conn.execute(
-            "SELECT id, filename, sha256, project_id FROM papers WHERE sha256=? AND user_id=?",
-            (sha, user["id"]),
-        ).fetchone()
-        or conn.execute(
-            "SELECT id, filename, sha256, project_id FROM papers WHERE sha256=?", (sha,)
-        ).fetchone()
-    )
+    paper = conn.execute(
+        "SELECT id, filename, project_id FROM papers WHERE sha256=?", (sha,)
+    ).fetchone()
     conn.close()
 
     if paper is None:
-        raise HTTPException(status_code=500, detail="Paper row missing after insert")
+        raise HTTPException(status_code=500, detail="Paper row missing after insert — check DB constraints")
 
-    return dict(paper)
+    return {"id": paper["id"], "filename": paper["filename"], "project_id": paper["project_id"]}
 
 
 @app.get("/api/papers/{paper_id}/pdf")
 def get_pdf(paper_id: int, ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
-    row  = conn.execute("SELECT sha256, user_id FROM papers WHERE id=?", (paper_id,)).fetchone()
+    row  = conn.execute("SELECT sha256, user_id, disk_filename FROM papers WHERE id=?", (paper_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     if row["user_id"] != user["id"] and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
-    sha = row["sha256"]
-    uid = row["user_id"]
-    for candidate in [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"]:
-        if candidate.exists():
-            return FileResponse(str(candidate), media_type="application/pdf")
-    raise HTTPException(status_code=404, detail="PDF file missing")
+    candidates = []
+    if row["disk_filename"]:
+        candidates.append(PAPERS_DIR / row["disk_filename"])
+    sha = row["sha256"] or ""
+    uid = row["user_id"] or 0
+    if sha:
+        candidates += [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"]
+    for c in candidates:
+        if c.exists():
+            return FileResponse(str(c), media_type="application/pdf")
+    raise HTTPException(status_code=404, detail="PDF file missing from disk")
 
 
 @app.delete("/api/papers/{paper_id}", status_code=204)
 def delete_paper(paper_id: int, ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
-    row  = conn.execute("SELECT sha256, user_id FROM papers WHERE id=?", (paper_id,)).fetchone()
+    row  = conn.execute("SELECT sha256, user_id, disk_filename FROM papers WHERE id=?", (paper_id,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Paper not found")
     if row["user_id"] != user["id"] and user["role"] != "admin":
         conn.close()
         raise HTTPException(status_code=403, detail="Access denied")
-    sha, uid = row["sha256"], row["user_id"]
-    with conn:
-        conn.execute("DELETE FROM spans       WHERE paper_id=?", (paper_id,))
-        conn.execute("DELETE FROM annotations WHERE paper_id=?", (paper_id,))
-        conn.execute("DELETE FROM papers      WHERE id=?",       (paper_id,))
-        conn.commit()
+    sha = row["sha256"] or ""
+    uid = row["user_id"] or 0
+    disk_fn = row["disk_filename"]
+    conn.execute("DELETE FROM spans       WHERE paper_id=?", (paper_id,))
+    conn.execute("DELETE FROM annotations WHERE paper_id=?", (paper_id,))
+    conn.execute("DELETE FROM papers      WHERE id=?",       (paper_id,))
+    conn.commit()
     conn.close()
-    for candidate in [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"]:
-        if candidate.exists():
-            candidate.unlink()
+    candidates = []
+    if disk_fn:
+        candidates.append(PAPERS_DIR / disk_fn)
+    if sha:
+        candidates += [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"]
+    for c in candidates:
+        if c.exists():
+            c.unlink()
             break
     return Response(status_code=204)
 
@@ -571,9 +575,8 @@ def assign_paper(paper_id: int, body: PaperAssign, ogai_session: str | None = Co
     if not row or (row["user_id"] != user["id"] and user["role"] != "admin"):
         conn.close()
         raise HTTPException(status_code=403, detail="Access denied")
-    with conn:
-        conn.execute("UPDATE papers SET project_id=? WHERE id=?", (body.project_id, paper_id))
-        conn.commit()
+    conn.execute("UPDATE papers SET project_id=? WHERE id=?", (body.project_id, paper_id))
+    conn.commit()
     conn.close()
     return {"paper_id": paper_id, "project_id": body.project_id}
 
