@@ -1627,7 +1627,7 @@ function buildUnassigned(papers) {
 function buildPaperItem(p) {
   const div = document.createElement('div');
   div.className = 'paper-item' + (p.id === currentPaperId ? ' active' : '');
-  div.addEventListener('click', () => loadPdf(p.id, p.filename));
+  div.addEventListener('click', () => { if (p.id) loadPdf(p.id, p.filename); });
 
   const done = p.annotated_by && p.annotated_by.length > 0;
 
@@ -1807,6 +1807,8 @@ async function uploadFiles(files) {
   zone.innerHTML = '<p>Uploading…</p>';
 
   let errors = [];
+  let lastUploaded = null;
+
   for (const file of fileArray) {
     const form = new FormData();
     form.append('file', file);
@@ -1815,6 +1817,9 @@ async function uploadFiles(files) {
       if (!res.ok) {
         const detail = await res.json().catch(() => ({}));
         errors.push(`${file.name}: ${detail.detail || 'server error ' + res.status}`);
+      } else {
+        const paper = await res.json();
+        if (paper && paper.id) lastUploaded = paper;
       }
     } catch (err) {
       errors.push(`${file.name}: ${err.message}`);
@@ -1831,6 +1836,11 @@ async function uploadFiles(files) {
   }
 
   await loadPapersAndProjects();
+
+  // Auto-select the last successfully uploaded paper
+  if (lastUploaded && lastUploaded.id) {
+    loadPdf(lastUploaded.id, lastUploaded.filename);
+  }
 }
 
 function handleDrop(e) {

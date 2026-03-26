@@ -543,48 +543,54 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
         insert_sql   = f"INSERT OR IGNORE INTO papers ({','.join(insert_cols)}) VALUES ({placeholders})"
         logger.error(f"upload: sql={insert_sql} params={insert_vals[:5]}")
 
-        conn.execute(insert_sql, insert_vals)
-        rows_inserted = conn.execute("SELECT changes()").fetchone()[0]
+        cur = conn.execute(insert_sql, insert_vals)
         conn.commit()
-        logger.error(f"upload: INSERT changed {rows_inserted} rows")
+        paper_id = cur.lastrowid if cur.lastrowid else None
+        logger.error(f"upload: INSERT lastrowid={paper_id}")
 
-        # ── Step 4: claim/update ownership unconditionally ───────────────
-        # The UNIQUE constraint may be on sha256 alone (old schema), meaning
-        # INSERT OR IGNORE silently no-ops when sha256 already exists with a
-        # different user_id. Always UPDATE to stamp our uid and disk_filename.
+        # ── Step 4: unconditional UPDATE to stamp ownership ──────────────
         if "user_id" in cols and "sha256" in cols:
             conn.execute("UPDATE papers SET user_id=? WHERE sha256=?", (uid, sha))
-            conn.commit()
         if "disk_filename" in cols and "sha256" in cols:
             conn.execute("UPDATE papers SET disk_filename=? WHERE sha256=?", (disk_fn, sha))
-            conn.commit()
         if "sha256" in cols:
             conn.execute("UPDATE papers SET filename=? WHERE sha256=?", (file.filename, sha))
-            conn.commit()
+        conn.commit()
 
-        # ── Step 5: fetch row — SELECT by sha256 only (user_id may be stale) ──
-        sel_cols = ["id", "filename"]
-        if "project_id" in cols: sel_cols.append("project_id")
+        # ── Step 5: resolve final paper_id ───────────────────────────────
+        # lastrowid is 0 when INSERT OR IGNORE fires but the row already existed.
+        # In that case SELECT to get the pre-existing row's id.
+        if not paper_id and "sha256" in cols:
+            row = conn.execute("SELECT id FROM papers WHERE sha256=?", (sha,)).fetchone()
+            if row:
+                paper_id = row["id"]
+                logger.error(f"upload: resolved existing id={paper_id} via SELECT")
 
-        if "sha256" in cols:
-            where, where_params = "sha256=?", (sha,)
-        else:
-            where, where_params = "filename=? ORDER BY id DESC LIMIT 1", (file.filename,)
+        if not paper_id:
+            # Last resort: highest id row with this filename
+            row = conn.execute(
+                "SELECT id FROM papers WHERE filename=? ORDER BY id DESC LIMIT 1",
+                (file.filename,)
+            ).fetchone()
+            if row:
+                paper_id = row["id"]
+                logger.error(f"upload: resolved via filename fallback id={paper_id}")
 
-        sel_sql = f"SELECT {','.join(sel_cols)} FROM papers WHERE {where}"
-        logger.error(f"upload: SELECT sql={sel_sql}")
-        row = conn.execute(sel_sql, where_params).fetchone()
+        proj_id = None
+        if paper_id and "project_id" in cols:
+            row = conn.execute("SELECT project_id FROM papers WHERE id=?", (paper_id,)).fetchone()
+            if row:
+                proj_id = row["project_id"]
 
-        if row is None:
-            logger.error(f"upload: SELECT returned None — sha={sha[:8]} uid={uid}")
+        if not paper_id:
             raise HTTPException(status_code=500,
-                detail=f"Upload failed: row not found after insert (sha={sha[:8]}, cols={sorted(cols)})")
+                detail=f"Upload failed: could not resolve paper id (sha={sha[:8]})")
 
-        logger.error(f"upload: success id={row['id']}")
+        logger.error(f"upload: success id={paper_id}")
         return {
-            "id":         row["id"],
-            "filename":   row["filename"],
-            "project_id": row["project_id"] if "project_id" in cols else None,
+            "id":         paper_id,
+            "filename":   file.filename,
+            "project_id": proj_id,
         }
 
     except HTTPException:
