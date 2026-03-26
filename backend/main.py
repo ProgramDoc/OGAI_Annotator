@@ -429,4 +429,11 @@ def export_csv():
 
 
 # ── Serve frontend ────────────────────────────────────────────────────────
-app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Serve annotator.html explicitly — avoids index.html naming collision."""
+    return FileResponse(str(FRONTEND / "annotator.html"), media_type="text/html")
+
+# Mount for static assets; html=False so StaticFiles never auto-serves index.html
+app.mount("/static", StaticFiles(directory=str(FRONTEND)), name="frontend")
