@@ -476,6 +476,18 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
     return result
 
 
+def _papers_columns() -> set[str]:
+    """Return the set of column names that currently exist in the papers table."""
+    conn = get_db()
+    try:
+        rows = conn.execute("PRAGMA table_info(papers)").fetchall()
+        return {row["name"] for row in rows}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
+
+
 @app.post("/api/papers/upload", status_code=201)
 async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
@@ -483,102 +495,74 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
     sha  = hashlib.sha256(data).hexdigest()
     uid  = user["id"]
 
-    # ── Step 1: write PDF bytes to disk ─────────────────────────────────────
+    # ── Step 1: write PDF bytes to disk ─────────────────────────────────
     dest = PAPERS_DIR / f"{sha[:16]}_{uid}.pdf"
     if not dest.exists():
         legacy = PAPERS_DIR / f"{sha[:16]}.pdf"
         dest.write_bytes(legacy.read_bytes() if legacy.exists() else data)
     disk_fn = dest.name
 
+    # ── Step 2: discover actual DB columns ──────────────────────────────
+    cols = _papers_columns()
+    logger.error(f"upload: papers columns in DB = {sorted(cols)}")
+
     conn = get_db()
     try:
-        # ── Step 2: ensure a row exists (INSERT OR IGNORE on minimal columns) ──
-        # We try columns one at a time, ignoring OperationalError (column missing)
-        # and IntegrityError (row already exists — fine, we SELECT after).
-        for insert_sql, insert_params in [
-            ("INSERT OR IGNORE INTO papers (filename, sha256, user_id, disk_filename) VALUES (?,?,?,?)",
-             (file.filename, sha, uid, disk_fn)),
-            ("INSERT OR IGNORE INTO papers (filename, sha256, user_id) VALUES (?,?,?)",
-             (file.filename, sha, uid)),
-            ("INSERT OR IGNORE INTO papers (filename, sha256) VALUES (?,?)",
-             (file.filename, sha)),
-            ("INSERT OR IGNORE INTO papers (filename) VALUES (?)",
-             (file.filename,)),
-        ]:
-            try:
-                conn.execute(insert_sql, insert_params)
-                conn.commit()
-                logger.info(f"upload: INSERT succeeded with sql={insert_sql[:60]}")
-                break
-            except sqlite3.OperationalError as e:
-                logger.warning(f"upload: INSERT column missing ({e}), trying simpler schema")
-                continue
-            except Exception as e:
-                logger.error(f"upload: INSERT unexpected error: {e}")
-                break
+        # ── Step 3: build INSERT from available columns only ─────────────
+        insert_cols  = ["filename"]
+        insert_vals  = [file.filename]
+        if "sha256"        in cols: insert_cols.append("sha256");        insert_vals.append(sha)
+        if "user_id"       in cols: insert_cols.append("user_id");       insert_vals.append(uid)
+        if "disk_filename" in cols: insert_cols.append("disk_filename"); insert_vals.append(disk_fn)
 
-        # ── Step 3: claim ownership via UPDATE (each column separate, fault-tolerant) ──
-        for upd_sql, upd_params in [
-            ("UPDATE papers SET user_id=? WHERE sha256=? AND user_id IS NULL", (uid, sha)),
-            ("UPDATE papers SET disk_filename=? WHERE sha256=? AND disk_filename IS NULL", (disk_fn, sha)),
-            ("UPDATE papers SET filename=? WHERE sha256=?", (file.filename, sha)),
-        ]:
-            try:
-                conn.execute(upd_sql, upd_params)
-                conn.commit()
-            except sqlite3.OperationalError as e:
-                logger.warning(f"upload: UPDATE column missing ({e}), skipping")
-            except Exception as e:
-                logger.warning(f"upload: UPDATE failed ({e}), continuing")
+        placeholders = ",".join("?" * len(insert_cols))
+        insert_sql   = f"INSERT OR IGNORE INTO papers ({','.join(insert_cols)}) VALUES ({placeholders})"
+        logger.error(f"upload: executing {insert_sql} params={insert_vals[:3]}")
 
-        # ── Step 4: fetch the row ────────────────────────────────────────────
-        # Try increasingly permissive SELECTs
-        paper_id   = None
-        project_id = None
-        filename   = file.filename
+        conn.execute(insert_sql, insert_vals)
+        conn.commit()
 
-        for sel_sql, sel_params in [
-            ("SELECT id, filename, project_id FROM papers WHERE sha256=? AND user_id=?", (sha, uid)),
-            ("SELECT id, filename, project_id FROM papers WHERE sha256=?", (sha,)),
-            ("SELECT id, filename FROM papers WHERE sha256=?", (sha,)),
-        ]:
-            try:
-                row = conn.execute(sel_sql, sel_params).fetchone()
-                if row:
-                    paper_id = row["id"]
-                    filename = row["filename"]
-                    project_id = row["project_id"] if "project_id" in row.keys() else None
-                    break
-            except sqlite3.OperationalError as e:
-                logger.warning(f"upload: SELECT failed ({e}), trying simpler query")
-                continue
+        # ── Step 4: claim ownership for existing rows ────────────────────
+        if "user_id" in cols:
+            conn.execute("UPDATE papers SET user_id=? WHERE sha256=? AND user_id IS NULL",
+                         (uid, sha))
+            conn.commit()
+        if "disk_filename" in cols:
+            conn.execute("UPDATE papers SET disk_filename=? WHERE sha256=? AND disk_filename IS NULL",
+                         (disk_fn, sha))
+            conn.commit()
 
-        if paper_id is None:
-            # Last resort: get highest id row with this filename
-            try:
-                row = conn.execute(
-                    "SELECT id, filename FROM papers WHERE filename=? ORDER BY id DESC LIMIT 1",
-                    (file.filename,)
-                ).fetchone()
-                if row:
-                    paper_id = row["id"]
-                    filename = row["filename"]
-                    logger.warning(f"upload: fell back to filename-based SELECT, id={paper_id}")
-            except Exception as e:
-                logger.error(f"upload: last-resort SELECT failed: {e}")
+        # ── Step 5: fetch row — build SELECT from available columns ──────
+        sel_cols = ["id", "filename"]
+        if "project_id" in cols: sel_cols.append("project_id")
 
-        if paper_id is None:
-            tb = traceback.format_exc()
-            logger.error(f"upload: all strategies exhausted. sha={sha[:8]} uid={uid}\n{tb}")
-            raise HTTPException(status_code=500, detail=f"Upload failed — all insert strategies exhausted (sha={sha[:8]})")
+        if "sha256" in cols and "user_id" in cols:
+            where, where_params = "sha256=? AND user_id=?", (sha, uid)
+        elif "sha256" in cols:
+            where, where_params = "sha256=?", (sha,)
+        else:
+            where, where_params = "filename=? ORDER BY id DESC LIMIT 1", (file.filename,)
 
-        logger.info(f"upload: success paper_id={paper_id} sha={sha[:8]}")
-        return {"id": paper_id, "filename": filename, "project_id": project_id}
+        sel_sql = f"SELECT {','.join(sel_cols)} FROM papers WHERE {where}"
+        logger.error(f"upload: SELECT sql={sel_sql}")
+        row = conn.execute(sel_sql, where_params).fetchone()
+
+        if row is None:
+            logger.error(f"upload: SELECT returned None — sha={sha[:8]} uid={uid}")
+            raise HTTPException(status_code=500,
+                detail=f"Upload failed: row not found after insert (sha={sha[:8]}, cols={sorted(cols)})")
+
+        logger.error(f"upload: success id={row['id']}")
+        return {
+            "id":         row["id"],
+            "filename":   row["filename"],
+            "project_id": row["project_id"] if "project_id" in cols else None,
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"upload: unhandled exception: {e}\n{traceback.format_exc()}")
+        logger.error(f"upload: unhandled: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Upload error: {str(e)}")
     finally:
         conn.close()
