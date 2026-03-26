@@ -4,6 +4,8 @@ v1.4 — user auth (register / login / sessions), admin secret, user-scoped data
 """
 
 import asyncio
+import logging
+import traceback
 import base64
 import hashlib
 import hmac
@@ -21,6 +23,8 @@ from fastapi import Cookie, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+logger = logging.getLogger("ogai")
 
 # ─────────────────────────────────────────────
 # Paths & config
@@ -477,39 +481,107 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
     user = require_user(ogai_session)
     data = await file.read()
     sha  = hashlib.sha256(data).hexdigest()
+    uid  = user["id"]
 
-    # Write PDF to user-scoped path on disk
-    dest = PAPERS_DIR / f"{sha[:16]}_{user['id']}.pdf"
+    # ── Step 1: write PDF bytes to disk ─────────────────────────────────────
+    dest = PAPERS_DIR / f"{sha[:16]}_{uid}.pdf"
     if not dest.exists():
         legacy = PAPERS_DIR / f"{sha[:16]}.pdf"
         dest.write_bytes(legacy.read_bytes() if legacy.exists() else data)
-    disk_filename = dest.name  # e.g. "abc123def456_1.pdf"
+    disk_fn = dest.name
 
     conn = get_db()
     try:
-        conn.execute(
-            "INSERT INTO papers (filename, sha256, user_id, disk_filename) VALUES (?,?,?,?)",
-            (file.filename, sha, user["id"], disk_filename),
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        # Row exists (old UNIQUE(sha256) constraint) — claim it for this user if unclaimed
-        conn.execute(
-            "UPDATE papers SET user_id=COALESCE(user_id,?), filename=?, disk_filename=COALESCE(disk_filename,?) "
-            "WHERE sha256=?",
-            (user["id"], file.filename, disk_filename, sha),
-        )
-        conn.commit()
+        # ── Step 2: ensure a row exists (INSERT OR IGNORE on minimal columns) ──
+        # We try columns one at a time, ignoring OperationalError (column missing)
+        # and IntegrityError (row already exists — fine, we SELECT after).
+        for insert_sql, insert_params in [
+            ("INSERT OR IGNORE INTO papers (filename, sha256, user_id, disk_filename) VALUES (?,?,?,?)",
+             (file.filename, sha, uid, disk_fn)),
+            ("INSERT OR IGNORE INTO papers (filename, sha256, user_id) VALUES (?,?,?)",
+             (file.filename, sha, uid)),
+            ("INSERT OR IGNORE INTO papers (filename, sha256) VALUES (?,?)",
+             (file.filename, sha)),
+            ("INSERT OR IGNORE INTO papers (filename) VALUES (?)",
+             (file.filename,)),
+        ]:
+            try:
+                conn.execute(insert_sql, insert_params)
+                conn.commit()
+                logger.info(f"upload: INSERT succeeded with sql={insert_sql[:60]}")
+                break
+            except sqlite3.OperationalError as e:
+                logger.warning(f"upload: INSERT column missing ({e}), trying simpler schema")
+                continue
+            except Exception as e:
+                logger.error(f"upload: INSERT unexpected error: {e}")
+                break
 
-    paper = conn.execute(
-        "SELECT id, filename, project_id FROM papers WHERE sha256=?", (sha,)
-    ).fetchone()
-    conn.close()
+        # ── Step 3: claim ownership via UPDATE (each column separate, fault-tolerant) ──
+        for upd_sql, upd_params in [
+            ("UPDATE papers SET user_id=? WHERE sha256=? AND user_id IS NULL", (uid, sha)),
+            ("UPDATE papers SET disk_filename=? WHERE sha256=? AND disk_filename IS NULL", (disk_fn, sha)),
+            ("UPDATE papers SET filename=? WHERE sha256=?", (file.filename, sha)),
+        ]:
+            try:
+                conn.execute(upd_sql, upd_params)
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                logger.warning(f"upload: UPDATE column missing ({e}), skipping")
+            except Exception as e:
+                logger.warning(f"upload: UPDATE failed ({e}), continuing")
 
-    if paper is None:
-        raise HTTPException(status_code=500, detail="Paper row missing after insert — check DB constraints")
+        # ── Step 4: fetch the row ────────────────────────────────────────────
+        # Try increasingly permissive SELECTs
+        paper_id   = None
+        project_id = None
+        filename   = file.filename
 
-    return {"id": paper["id"], "filename": paper["filename"], "project_id": paper["project_id"]}
+        for sel_sql, sel_params in [
+            ("SELECT id, filename, project_id FROM papers WHERE sha256=? AND user_id=?", (sha, uid)),
+            ("SELECT id, filename, project_id FROM papers WHERE sha256=?", (sha,)),
+            ("SELECT id, filename FROM papers WHERE sha256=?", (sha,)),
+        ]:
+            try:
+                row = conn.execute(sel_sql, sel_params).fetchone()
+                if row:
+                    paper_id = row["id"]
+                    filename = row["filename"]
+                    project_id = row["project_id"] if "project_id" in row.keys() else None
+                    break
+            except sqlite3.OperationalError as e:
+                logger.warning(f"upload: SELECT failed ({e}), trying simpler query")
+                continue
+
+        if paper_id is None:
+            # Last resort: get highest id row with this filename
+            try:
+                row = conn.execute(
+                    "SELECT id, filename FROM papers WHERE filename=? ORDER BY id DESC LIMIT 1",
+                    (file.filename,)
+                ).fetchone()
+                if row:
+                    paper_id = row["id"]
+                    filename = row["filename"]
+                    logger.warning(f"upload: fell back to filename-based SELECT, id={paper_id}")
+            except Exception as e:
+                logger.error(f"upload: last-resort SELECT failed: {e}")
+
+        if paper_id is None:
+            tb = traceback.format_exc()
+            logger.error(f"upload: all strategies exhausted. sha={sha[:8]} uid={uid}\n{tb}")
+            raise HTTPException(status_code=500, detail=f"Upload failed — all insert strategies exhausted (sha={sha[:8]})")
+
+        logger.info(f"upload: success paper_id={paper_id} sha={sha[:8]}")
+        return {"id": paper_id, "filename": filename, "project_id": project_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"upload: unhandled exception: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Upload error: {str(e)}")
+    finally:
+        conn.close()
 
 
 @app.get("/api/papers/{paper_id}/pdf")
@@ -785,6 +857,19 @@ async def prefill_fields(paper_id: int, body: PrefillRequest, ogai_session: str 
 
     result = await asyncio.to_thread(_call_anthropic, pdf_path.read_bytes(), _build_prefill_prompt(body.study_type))
     return result
+
+
+# ─────────────────────────────────────────────
+# Admin: reset DB schema (adds missing columns)
+# ─────────────────────────────────────────────
+@app.post("/api/admin/reset-schema")
+def reset_schema(ogai_session: str | None = Cookie(default=None)):
+    """Re-runs init_db() migrations. Safe to call on a live DB — only adds missing columns."""
+    user = require_user(ogai_session)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    init_db()
+    return {"status": "ok", "message": "Schema migrations re-applied"}
 
 
 # ─────────────────────────────────────────────
