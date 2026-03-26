@@ -476,27 +476,45 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
     data = await file.read()
     sha  = hashlib.sha256(data).hexdigest()
 
-    # Store with user-scoped filename to avoid cross-user collisions
+    # Write PDF to user-scoped path so get_pdf always finds it
     dest = PAPERS_DIR / f"{sha[:16]}_{user['id']}.pdf"
     if not dest.exists():
         legacy = PAPERS_DIR / f"{sha[:16]}.pdf"
-        if legacy.exists():
-            dest = legacy
-        else:
-            dest.write_bytes(data)
+        dest.write_bytes(legacy.read_bytes() if legacy.exists() else data)
 
     conn = get_db()
     with conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO papers (filename, sha256, user_id) VALUES (?,?,?)",
-            (file.filename, sha, user["id"]),
-        )
+        # Try a clean INSERT first.
+        # If IntegrityError, the row already exists (legacy UNIQUE(sha256) or duplicate).
+        # Claim it for this user if it is currently unclaimed (user_id IS NULL).
+        try:
+            conn.execute(
+                "INSERT INTO papers (filename, sha256, user_id) VALUES (?,?,?)",
+                (file.filename, sha, user["id"]),
+            )
+        except sqlite3.IntegrityError:
+            conn.execute(
+                "UPDATE papers SET user_id=?, filename=? "
+                "WHERE sha256=? AND (user_id IS NULL OR user_id=?)",
+                (user["id"], file.filename, sha, user["id"]),
+            )
         conn.commit()
-    paper = conn.execute(
-        "SELECT id, filename, sha256, project_id FROM papers WHERE sha256=? AND user_id=?",
-        (sha, user["id"]),
-    ).fetchone()
+
+    # Fetch the row — user-scoped first, then bare sha fallback for very old DBs
+    paper = (
+        conn.execute(
+            "SELECT id, filename, sha256, project_id FROM papers WHERE sha256=? AND user_id=?",
+            (sha, user["id"]),
+        ).fetchone()
+        or conn.execute(
+            "SELECT id, filename, sha256, project_id FROM papers WHERE sha256=?", (sha,)
+        ).fetchone()
+    )
     conn.close()
+
+    if paper is None:
+        raise HTTPException(status_code=500, detail="Paper row missing after insert")
+
     return dict(paper)
 
 
