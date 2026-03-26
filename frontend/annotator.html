@@ -52,28 +52,68 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 
 /* ── LEFT: PAPER LIST ── */
 #sidebar {
-  width: 220px; flex-shrink: 0; background: var(--navy);
+  width: 230px; flex-shrink: 0; background: var(--navy);
   border-right: 1px solid rgba(255,255,255,.06);
   display: flex; flex-direction: column; overflow: hidden;
 }
 #sidebar-header {
   padding: 12px 14px 8px; font-size: 10px; font-weight: 700;
   color: rgba(255,255,255,.4); letter-spacing: .1em; text-transform: uppercase;
-  flex-shrink: 0;
+  flex-shrink: 0; display: flex; align-items: center;
 }
-#paper-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+#new-proj-btn {
+  margin-left: auto; background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.6);
+  border-radius: 4px; cursor: pointer; padding: 0px 8px; font-size: 16px;
+  line-height: 1.4; font-family: inherit;
+}
+#new-proj-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+#project-list { flex: 1; overflow-y: auto; }
+
+/* Project folder */
+.project-folder { border-bottom: 1px solid rgba(255,255,255,.04); }
+.project-header {
+  display: flex; align-items: center; padding: 7px 8px 7px 10px;
+  cursor: pointer; gap: 5px; user-select: none;
+}
+.project-header:hover { background: rgba(255,255,255,.05); }
+.project-arrow { font-size: 8px; color: rgba(255,255,255,.28); width: 10px; flex-shrink: 0; }
+.project-name-text {
+  flex: 1; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.72);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.project-name-text.unassigned { color: rgba(255,255,255,.35); font-weight: 500; font-style: italic; }
+.project-count { font-size: 9px; color: rgba(255,255,255,.22); font-family: 'IBM Plex Mono', monospace; margin-right: 2px; }
+.project-actions { display: none; gap: 1px; align-items: center; }
+.project-header:hover .project-actions { display: flex; }
+.proj-act-btn {
+  background: none; border: none; color: rgba(255,255,255,.32);
+  cursor: pointer; font-size: 11px; padding: 2px 5px; border-radius: 3px; line-height: 1;
+}
+.proj-act-btn:hover { color: #fff; background: rgba(255,255,255,.12); }
+.proj-act-btn.del:hover { color: #fca5a5; background: rgba(220,38,38,.25); }
+.project-papers { padding-bottom: 3px; }
+.project-name-input {
+  flex: 1; background: rgba(255,255,255,.1); border: 1px solid var(--sky);
+  border-radius: 3px; color: #fff; padding: 2px 6px; font-size: 11px;
+  font-family: inherit; outline: none; min-width: 0;
+}
+
+/* Paper items within folders */
 .paper-item {
-  padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
-  transition: background .12s;
+  padding: 7px 8px 7px 20px; border-radius: 5px; cursor: pointer; margin: 1px 6px;
+  transition: background .12s; position: relative;
 }
 .paper-item:hover { background: rgba(255,255,255,.06); }
 .paper-item.active { background: rgba(94,154,208,.2); }
 .paper-item .pi-name {
-  font-size: 11.5px; color: #e2e8f0; font-weight: 500;
+  font-size: 11px; color: #e2e8f0; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-right: 18px;
 }
 .paper-item .pi-meta {
-  font-size: 10px; color: rgba(255,255,255,.3); margin-top: 2px;
+  font-size: 9.5px; color: rgba(255,255,255,.28); margin-top: 2px;
   font-family: 'IBM Plex Mono', monospace;
 }
 .pi-chip {
@@ -81,12 +121,32 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   font-weight: 600; margin-top: 3px;
 }
 .pi-chip.done  { background: rgba(22,163,74,.2);  color: #4ade80; }
-.pi-chip.prog  { background: rgba(217,119,6,.2);  color: #fbbf24; }
 .pi-chip.none  { background: rgba(255,255,255,.06); color: rgba(255,255,255,.3); }
 
+/* Paper action buttons — visible on hover */
+.paper-item-actions {
+  display: none; position: absolute; top: 6px; right: 6px; gap: 2px; align-items: center;
+}
+.paper-item:hover .paper-item-actions { display: flex; }
+.paper-act-btn {
+  background: rgba(255,255,255,.07); border: none; color: rgba(255,255,255,.38);
+  cursor: pointer; font-size: 10px; padding: 2px 5px; border-radius: 3px; line-height: 1.3;
+}
+.paper-act-btn:hover { background: rgba(220,38,38,.3); color: #fca5a5; }
+
+/* Move-to-project select — visible on hover */
+.move-select {
+  display: none; font-size: 9px; padding: 1px 2px; border-radius: 3px; margin-top: 4px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  color: rgba(255,255,255,.4); font-family: inherit; cursor: pointer; width: 100%;
+}
+.paper-item:hover .move-select { display: block; }
+.move-select option { background: #1e2d42; color: #e2e8f0; }
+
 #upload-zone {
-  margin: 8px; padding: 14px; border: 1.5px dashed rgba(255,255,255,.15);
+  margin: 8px; padding: 12px; border: 1.5px dashed rgba(255,255,255,.15);
   border-radius: 6px; text-align: center; cursor: pointer; transition: border-color .15s;
+  flex-shrink: 0;
 }
 #upload-zone:hover { border-color: var(--sky); }
 #upload-zone p { font-size: 11px; color: rgba(255,255,255,.4); line-height: 1.5; }
@@ -123,7 +183,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 }
 .page-wrapper canvas { display: block; }
 
-/* Text layer — for selection */
+/* Text layer */
 .textLayer {
   position: absolute; inset: 0; overflow: hidden;
   opacity: 1; line-height: 1; pointer-events: all;
@@ -144,6 +204,14 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   cursor: pointer; transition: opacity .1s;
 }
 .span-box:hover { opacity: .7; }
+
+/* Flash animation for span scroll-to */
+@keyframes spanFlash {
+  0%,100% { opacity: 1; }
+  35%      { opacity: 0.08; }
+  70%      { opacity: 0.9; }
+}
+.span-flash { animation: spanFlash 0.5s ease 3 !important; border-width: 2.5px !important; }
 
 /* Active field pulse */
 #active-field-banner {
@@ -171,18 +239,14 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 }
 #form-scroll { flex: 1; overflow-y: auto; padding: 16px; }
 
-.form-section {
-  margin-bottom: 20px;
-}
+.form-section { margin-bottom: 20px; }
 .form-section-header {
   font-size: 10px; font-weight: 700; color: var(--blue); letter-spacing: .1em;
   text-transform: uppercase; padding: 6px 10px; background: #eef3fa;
   border-radius: 4px; margin-bottom: 10px; border-left: 3px solid var(--sky);
 }
 
-.field-row {
-  margin-bottom: 10px; position: relative;
-}
+.field-row { margin-bottom: 10px; position: relative; }
 .field-label {
   font-size: 10.5px; font-weight: 600; color: var(--blue);
   margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
@@ -215,7 +279,19 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   border-color: var(--purple); box-shadow: 0 0 0 2px rgba(124,58,237,.12);
 }
 
-/* Span tag below a linked field */
+/* AI pre-fill amber / corrections red borders */
+.field-prefilled > input,
+.field-prefilled > textarea,
+.field-prefilled > select {
+  border-left: 3px solid #d97706 !important;
+}
+.field-corrected > input,
+.field-corrected > textarea,
+.field-corrected > select {
+  border-left: 3px solid #dc2626 !important;
+}
+
+/* Span tag below linked field */
 .span-tag {
   margin-top: 4px; padding: 4px 8px; background: #f0ebff;
   border: 1px solid #c4b5fd; border-radius: 4px;
@@ -227,7 +303,25 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 .span-tag .st-del { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 12px; padding: 0 2px; flex-shrink: 0; }
 .span-tag .st-del:hover { color: var(--red); }
 
-/* Conditional section visibility */
+/* Auto-fill panel */
+.autofill-panel {
+  background: #fffbeb; border: 1.5px solid #d97706;
+  border-radius: 6px; padding: 12px; margin-bottom: 20px;
+}
+.autofill-panel-title {
+  font-size: 10px; font-weight: 700; color: #92400e;
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+}
+.autofill-btn {
+  width: 100%; padding: 8px; border: none; border-radius: 5px;
+  background: #d97706; color: #fff; font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: background .12s;
+}
+.autofill-btn:hover:not(:disabled) { background: #b45309; }
+.autofill-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.autofill-hint { font-size: 10px; color: #92400e; margin-top: 5px; }
+.autofill-loading { font-size: 10px; color: #92400e; margin-top: 5px; display: none; font-style: italic; }
+
 .type-section { display: none; }
 .type-section.visible { display: block; }
 
@@ -288,57 +382,6 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* ── CORRECTION TRACKING ── */
-.field-row input.field-corrected,
-.field-row textarea.field-corrected {
-  border-left: 3px solid #dc2626 !important;
-  background: #fff8f8 !important;
-}
-.correction-summary {
-  background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px;
-  padding: 8px 10px; font-size: 11px; color: #991b1b; margin-bottom: 8px;
-  display: none; line-height: 1.6;
-}
-.correction-count { font-weight: 700; }
-.action-btn-active { outline: 2px solid #1e293b !important; font-weight: 900 !important; }
-
-/* ── AI AUTO-FILL ── */
-.autofill-panel {
-  background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px;
-  padding: 10px 12px; margin-bottom: 10px;
-}
-.autofill-panel .af-header {
-  font-size: 10px; font-weight: 700; color: #92400e; letter-spacing: .08em;
-  text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
-}
-.autofill-panel .af-desc {
-  font-size: 11px; color: #78350f; margin-bottom: 8px; line-height: 1.5;
-}
-#autofill-btn {
-  padding: 6px 14px; background: #d97706; color: #fff; border: none;
-  border-radius: 5px; font-family: inherit; font-size: 11.5px; font-weight: 700;
-  cursor: pointer; transition: background .15s;
-}
-#autofill-btn:hover:not(:disabled) { background: #b45309; }
-#autofill-btn:disabled { background: #9ca3af; cursor: not-allowed; }
-#autofill-status {
-  margin-top: 7px; font-size: 11px; line-height: 1.5;
-  color: var(--muted); display: none;
-}
-/* Fields pre-filled by AI get a left amber bar — removed on user edit */
-.field-row input.ai-prefilled,
-.field-row textarea.ai-prefilled {
-  border-left: 3px solid #d97706 !important;
-  background: #fffdf5 !important;
-}
-.field-row input.ai-prefilled:focus,
-.field-row textarea.ai-prefilled:focus { background: #fff !important; }
-.ai-banner {
-  background: #fef3c7; border: 1px solid #fde68a; border-radius: 5px;
-  padding: 6px 10px; font-size: 11px; color: #92400e; font-weight: 600;
-  margin-bottom: 8px; display: none;
-}
 </style>
 </head>
 <body>
@@ -350,21 +393,24 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   <input type="text" id="reviewer-input" placeholder="Reviewer ID (e.g. tom)" autocomplete="off">
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportCSV()">⬇ Export CSV</button>
-  <button class="tb-btn primary" onclick="saveAnnotation()" id="save-btn">💾 Save</button>
+  <button class="tb-btn primary" onclick="saveAnnotation()" id="save-btn">Save</button>
   <span id="save-status">no paper selected</span>
 </div>
 
 <div id="layout">
 
-<!-- ── SIDEBAR: PAPER LIST ─────────────────────────────────────────────── -->
+<!-- ── SIDEBAR: PROJECT FOLDERS ────────────────────────────────────────── -->
 <div id="sidebar">
-  <div id="sidebar-header">Papers</div>
+  <div id="sidebar-header">
+    Projects
+    <button id="new-proj-btn" onclick="createNewProject()" title="New project">+</button>
+  </div>
+  <div id="project-list"></div>
   <div id="upload-zone" onclick="document.getElementById('file-input').click()"
        ondragover="event.preventDefault()" ondrop="handleDrop(event)">
     <p><strong>Upload PDF</strong><br>click or drag &amp; drop</p>
   </div>
   <input type="file" id="file-input" accept=".pdf" multiple onchange="uploadFiles(this.files)">
-  <div id="paper-list"></div>
 </div>
 
 <!-- ── PDF VIEWER ──────────────────────────────────────────────────────── -->
@@ -468,15 +514,14 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
       </div>
     </div>
 
-    <!-- AI Auto-fill Panel -->
-    <div class="form-section">
-      <div id="ai-banner" class="ai-banner">⚡ Fields pre-filled by Claude — amber border = unverified. Edit or confirm each value before saving.</div>
-      <div class="autofill-panel">
-        <div class="af-header">⚡ AI-Assisted Extraction</div>
-        <div class="af-desc">Set the study type above, then click <strong>Auto-fill</strong> to extract all fields from the PDF using Claude. Review every value before saving.</div>
-        <button id="autofill-btn" onclick="autoFillFields()">🤖 Auto-fill from PDF</button>
-        <div id="autofill-status"></div>
-      </div>
+    <!-- AI Auto-fill panel -->
+    <div class="autofill-panel">
+      <div class="autofill-panel-title">AI Extraction</div>
+      <button id="autofill-btn" class="autofill-btn" onclick="prefillFromPDF()" disabled>
+        Auto-fill from PDF
+      </button>
+      <div id="autofill-hint" class="autofill-hint">Select a study type above to enable</div>
+      <div id="autofill-loading" class="autofill-loading">Extracting fields… (~15–40 s)</div>
     </div>
 
     <!-- Layer 1: Universal -->
@@ -500,7 +545,6 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
     <!-- Annotation notes -->
     <div class="form-section">
       <div class="form-section-header">Annotation Notes</div>
-      <div id="correction-summary" class="correction-summary"></div>
       <div class="field-row">
         <div class="field-label">Correction / Flag Notes</div>
         <textarea id="f-correction_notes" placeholder="Explain why the pipeline classification is wrong, or what makes this case ambiguous..."></textarea>
@@ -520,71 +564,67 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// TAXONOMY & FIELD SCHEMA
+// TAXONOMY & FIELD SCHEMA  (v2.1)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SUBCATS = {
-  // Experimental branch — sub-groups map directly to study type groups
-  "Primary Studies":       ["Randomized Controlled","Non-Randomized Controlled","Non-Randomized Uncontrolled","Quasi-Experimental","Qualitative & Mixed Methods"],
-  // Observational branch — separated per taxonomy (c:"major" node)
-  "Observational Studies": ["Descriptive","Analytical","Diagnostic / Prognostic"],
-  "Evidence Synthesis":    ["Reviews"],
-  "Guidance / Consensus":  ["Guidelines & Consensus"],
+  "Primary Studies":            ["Randomized Controlled","Non-Randomized Controlled",
+                                 "Non-Randomized Uncontrolled","Quasi-Experimental",
+                                 "Qualitative & Mixed Methods"],
+  "Observational Studies":      ["Descriptive","Analytical","Diagnostic / Prognostic"],
+  "Evidence Synthesis":         ["Reviews"],
+  "Guidance / Consensus":       ["Guidelines & Consensus"],
   "Economic & Decision Models": ["Economic Evaluation"],
 };
 
 const STUDY_TYPES = {
-  // Primary Studies (Experimental)
-  "Randomized Controlled":       ["Randomized Controlled Trial","Cluster Randomized Trial","Stepped-Wedge Cluster RCT","Crossover Trial"],
-  "Non-Randomized Controlled":   ["Non-Randomized Trial"],
-  "Non-Randomized Uncontrolled": ["Single-Arm Trial","Dose-Escalation Study"],
-  "Quasi-Experimental":          ["Interrupted Time Series","Uncontrolled Before-After","Difference-in-Differences","Regression Discontinuity"],
-  "Qualitative & Mixed Methods": ["Qualitative Research","Mixed Methods"],
-  // Observational Studies
-  "Descriptive":                 ["Case Report / Series","Cross-Sectional (Descriptive)","Ecological Study"],
-  "Analytical":                  ["Case-Control","Cohort Study","Cross-Sectional (Analytical)","Self-Controlled Case Series","Case-Crossover","Mendelian Randomization"],
-  "Diagnostic / Prognostic":     ["Diagnostic Accuracy","Prognostic Factor Study","Prediction Model Study"],
-  // Evidence Synthesis
-  "Reviews":                     ["SR without Meta-Analysis","SR with Meta-Analysis","Umbrella Review","Network Meta-Analysis","Scoping Review","Narrative Review"],
-  // Guidance & Economic
-  "Guidelines & Consensus":      ["Guideline / Consensus"],
-  "Economic Evaluation":         ["Economic Evaluation"],
+  "Randomized Controlled":        ["Randomized Controlled Trial","Cluster Randomized Trial","Stepped-Wedge Cluster RCT","Crossover Trial"],
+  "Non-Randomized Controlled":    ["Non-Randomized Trial"],
+  "Non-Randomized Uncontrolled":  ["Single-Arm Trial","Dose-Escalation Study"],
+  "Quasi-Experimental":           ["Interrupted Time Series","Uncontrolled Before-After","Difference-in-Differences","Regression Discontinuity"],
+  "Descriptive":                  ["Case Report / Series","Cross-Sectional (Descriptive)","Ecological Study"],
+  "Analytical":                   ["Case-Control","Cohort Study","Cross-Sectional (Analytical)","Self-Controlled Case Series","Case-Crossover","Mendelian Randomization"],
+  "Diagnostic / Prognostic":      ["Diagnostic Accuracy","Prognostic Factor Study","Prediction Model Study"],
+  "Qualitative & Mixed Methods":  ["Qualitative Research","Mixed Methods"],
+  "Reviews":                      ["SR without Meta-Analysis","SR with Meta-Analysis","Umbrella Review","Network Meta-Analysis","Scoping Review","Narrative Review"],
+  "Guidelines & Consensus":       ["Guideline / Consensus"],
+  "Economic Evaluation":          ["Economic Evaluation"],
 };
 
 const ROB_MAP = {
-  "Randomized Controlled Trial": "RoB 2",
-  "Cluster Randomized Trial": "RoB 2 (cluster)",
-  "Stepped-Wedge Cluster RCT": "RoB 2 (SW-CRT)",
-  "Crossover Trial": "RoB 2 (crossover)",
-  "Non-Randomized Trial": "ROBINS-I V2",
-  "Single-Arm Trial": "ROBINS-I V2 (adapted)",
-  "Dose-Escalation Study": "ROBINS-I V2 (adapted)",
-  "Interrupted Time Series": "EPOC",
-  "Uncontrolled Before-After": "EPOC",
-  "Difference-in-Differences": "ROBINS-I",
-  "Regression Discontinuity": "ROBINS-I",
-  "Case Report / Series": "CARE Checklist",
-  "Cross-Sectional (Descriptive)": "AXIS",
-  "Ecological Study": "No standard tool",
-  "Case-Control": "ROBINS-E",
-  "Cohort Study": "ROBINS-E",
-  "Cross-Sectional (Analytical)": "AXIS",
-  "Self-Controlled Case Series": "SCCS Checklist",
-  "Case-Crossover": "NOS",
-  "Mendelian Randomization": "STROBE-MR",
-  "Diagnostic Accuracy": "QUADAS-2",
-  "Prognostic Factor Study": "QUIPS",
-  "Prediction Model Study": "PROBAST",
-  "Qualitative Research": "CASP / COREQ",
-  "Mixed Methods": "MMAT",
-  "SR without Meta-Analysis": "AMSTAR 2",
-  "SR with Meta-Analysis": "AMSTAR 2 + ROB-ME",
-  "Umbrella Review": "AMSTAR 2",
-  "Network Meta-Analysis": "CINeMA",
-  "Scoping Review": "No standard tool (PRISMA-ScR)",
-  "Narrative Review": "No standard tool",
-  "Guideline / Consensus": "AGREE II",
-  "Economic Evaluation": "CHEERS",
+  "Randomized Controlled Trial":    "RoB 2",
+  "Cluster Randomized Trial":       "RoB 2 (cluster)",
+  "Stepped-Wedge Cluster RCT":      "RoB 2 (SW-CRT)",
+  "Crossover Trial":                "RoB 2 (crossover)",
+  "Non-Randomized Trial":           "ROBINS-I V2",
+  "Single-Arm Trial":               "ROBINS-I V2 (adapted)",
+  "Dose-Escalation Study":          "ROBINS-I V2 (adapted)",
+  "Interrupted Time Series":        "EPOC",
+  "Uncontrolled Before-After":      "EPOC",
+  "Difference-in-Differences":      "ROBINS-I V2",
+  "Regression Discontinuity":       "ROBINS-I V2",
+  "Case Report / Series":           "CARE Checklist",
+  "Cross-Sectional (Descriptive)":  "AXIS",
+  "Ecological Study":               "No standard tool",
+  "Case-Control":                   "ROBINS-E",
+  "Cohort Study":                   "ROBINS-E",
+  "Cross-Sectional (Analytical)":   "AXIS",
+  "Self-Controlled Case Series":    "SCCS Checklist",
+  "Case-Crossover":                 "ROBINS-E (adapted)",
+  "Mendelian Randomization":        "STROBE-MR",
+  "Diagnostic Accuracy":            "QUADAS-2",
+  "Prognostic Factor Study":        "QUIPS",
+  "Prediction Model Study":         "PROBAST",
+  "Qualitative Research":           "CASP / COREQ",
+  "Mixed Methods":                  "MMAT",
+  "SR without Meta-Analysis":       "AMSTAR 2",
+  "SR with Meta-Analysis":          "AMSTAR 2 + ROB-ME",
+  "Umbrella Review":                "AMSTAR 2",
+  "Network Meta-Analysis":          "CINeMA",
+  "Scoping Review":                 "No standard tool (PRISMA-ScR)",
+  "Narrative Review":               "No standard tool",
+  "Guideline / Consensus":          "AGREE II",
+  "Economic Evaluation":            "CHEERS",
 };
 
 // Layer 1 universal fields — all studies
@@ -595,10 +635,10 @@ const UNIVERSAL_FIELDS = [
   { id:"citation_journal",      label:"Journal",                type:"text" },
   { id:"citation_doi",          label:"DOI",                    type:"text" },
   { id:"study_objective",       label:"Study Objective",        type:"textarea" },
-  { id:"population_participants",         label:"Participants (P)",         type:"textarea" },
-  { id:"population_intervention_exposure",label:"Intervention / Exposure (I/E)", type:"textarea" },
-  { id:"population_comparator",           label:"Comparator (C)",           type:"text" },
-  { id:"population_outcomes",             label:"Outcomes (O)",             type:"textarea" },
+  { id:"population_participants",          label:"Participants (P)",              type:"textarea" },
+  { id:"population_intervention_exposure", label:"Intervention / Exposure (I/E)", type:"textarea" },
+  { id:"population_comparator",            label:"Comparator (C)",               type:"text" },
+  { id:"population_outcomes",              label:"Outcomes (O)",                 type:"textarea" },
   { id:"sample_size_total",     label:"Total N",                type:"text" },
   { id:"sample_size_per_group", label:"N per group",            type:"text" },
   { id:"power_calculation_reported", label:"Power calculation", type:"text" },
@@ -607,259 +647,258 @@ const UNIVERSAL_FIELDS = [
   { id:"study_period_enrollment_start", label:"Enrolment start", type:"text" },
   { id:"study_period_enrollment_end",   label:"Enrolment end",   type:"text" },
   { id:"follow_up_duration",    label:"Follow-up duration",     type:"text" },
-  { id:"primary_outcome_definition",  label:"Primary outcome — definition",   type:"textarea" },
-  { id:"primary_outcome_measurement", label:"Primary outcome — measurement",  type:"text" },
-  { id:"primary_outcome_timing",      label:"Primary outcome — timing",       type:"text" },
+  { id:"primary_outcome_definition",  label:"Primary outcome — definition",  type:"textarea" },
+  { id:"primary_outcome_measurement", label:"Primary outcome — measurement", type:"text" },
+  { id:"primary_outcome_timing",      label:"Primary outcome — timing",      type:"text" },
   { id:"secondary_outcomes",    label:"Secondary outcomes",     type:"textarea" },
-  { id:"key_findings_effect_estimate",label:"Effect estimate",  type:"text" },
-  { id:"key_findings_metric",   label:"Metric (HR/OR/MD/etc)",  type:"text" },
-  { id:"key_findings_ci_lower", label:"95% CI lower",           type:"text" },
-  { id:"key_findings_ci_upper", label:"95% CI upper",           type:"text" },
-  { id:"key_findings_pvalue",   label:"p-value",                type:"text" },
-  { id:"key_findings_direction",label:"Direction / interpretation", type:"textarea" },
+  { id:"key_findings_effect_estimate", label:"Effect estimate",           type:"text" },
+  { id:"key_findings_metric",          label:"Metric (HR/OR/MD/etc)",     type:"text" },
+  { id:"key_findings_ci_lower",        label:"95% CI lower",              type:"text" },
+  { id:"key_findings_ci_upper",        label:"95% CI upper",              type:"text" },
+  { id:"key_findings_pvalue",          label:"p-value",                   type:"text" },
+  { id:"key_findings_direction",       label:"Direction / interpretation", type:"textarea" },
   { id:"funding_source",        label:"Funding source",         type:"text" },
   { id:"conflicts_of_interest", label:"Conflicts of interest",  type:"textarea" },
   { id:"limitations_stated",    label:"Author-stated limitations", type:"textarea" },
   { id:"protocol_registration", label:"Protocol registration",  type:"text" },
 ];
 
-// Layer 2 type-specific fields by study type
+// Layer 2 type-specific fields
 const TYPE_FIELDS = {
   "Randomized Controlled Trial": [
-    {id:"randomization_method", label:"Randomization method", type:"text"},
-    {id:"allocation_concealment", label:"Allocation concealment", type:"text"},
-    {id:"allocation_ratio", label:"Allocation ratio", type:"text"},
-    {id:"stratification_factors", label:"Stratification factors", type:"text"},
-    {id:"baseline_balance", label:"Baseline balance", type:"text"},
-    {id:"blinding_participants", label:"Blinding — participants", type:"text"},
-    {id:"blinding_personnel", label:"Blinding — personnel", type:"text"},
-    {id:"blinding_outcome_assessors", label:"Blinding — outcome assessors", type:"text"},
-    {id:"protocol_deviations", label:"Protocol deviations", type:"textarea"},
-    {id:"analysis_framework", label:"Analysis framework (ITT/PP/AT)", type:"text"},
-    {id:"attrition_rate", label:"Attrition rate", type:"text"},
-    {id:"missing_data_handling", label:"Missing data handling", type:"text"},
-    {id:"outcome_measurement_method", label:"Outcome measurement method", type:"text"},
-    {id:"protocol_available", label:"Protocol available", type:"text"},
-    {id:"outcomes_match_protocol", label:"Outcomes match protocol", type:"text"},
-    {id:"consort_flow_diagram", label:"CONSORT flow diagram", type:"text"},
+    {id:"randomization_method",          label:"Randomization method",           type:"text"},
+    {id:"allocation_concealment",        label:"Allocation concealment",         type:"text"},
+    {id:"allocation_ratio",              label:"Allocation ratio",               type:"text"},
+    {id:"stratification_factors",        label:"Stratification factors",         type:"text"},
+    {id:"baseline_balance",              label:"Baseline balance",               type:"text"},
+    {id:"blinding_participants",         label:"Blinding — participants",        type:"text"},
+    {id:"blinding_personnel",            label:"Blinding — personnel",           type:"text"},
+    {id:"blinding_outcome_assessors",    label:"Blinding — outcome assessors",   type:"text"},
+    {id:"protocol_deviations",           label:"Protocol deviations",            type:"textarea"},
+    {id:"analysis_framework",            label:"Analysis framework (ITT/PP/AT)", type:"text"},
+    {id:"attrition_rate",                label:"Attrition rate",                 type:"text"},
+    {id:"missing_data_handling",         label:"Missing data handling",          type:"text"},
+    {id:"outcome_measurement_method",    label:"Outcome measurement method",     type:"text"},
+    {id:"protocol_available",            label:"Protocol available",             type:"text"},
+    {id:"outcomes_match_protocol",       label:"Outcomes match protocol",        type:"text"},
+    {id:"consort_flow_diagram",          label:"CONSORT flow diagram",           type:"text"},
   ],
   "Cluster Randomized Trial": [
-    {id:"cluster_unit", label:"Cluster unit", type:"text"},
-    {id:"n_clusters", label:"N clusters per arm", type:"text"},
-    {id:"icc_reported", label:"ICC reported", type:"text"},
+    {id:"cluster_unit",                  label:"Cluster unit",                   type:"text"},
+    {id:"n_clusters",                    label:"N clusters per arm",             type:"text"},
+    {id:"icc_reported",                  label:"ICC reported",                   type:"text"},
     {id:"recruitment_after_randomization", label:"Recruitment after randomization", type:"text"},
-    {id:"clustering_in_analysis", label:"Clustering in analysis", type:"text"},
-    {id:"contamination_risk", label:"Contamination risk", type:"textarea"},
+    {id:"clustering_in_analysis",        label:"Clustering in analysis",         type:"text"},
+    {id:"contamination_risk",            label:"Contamination risk",             type:"textarea"},
   ],
   "Crossover Trial": [
-    {id:"washout_period", label:"Washout period", type:"text"},
+    {id:"washout_period",    label:"Washout period",         type:"text"},
     {id:"carryover_assessment", label:"Carryover assessment", type:"text"},
-    {id:"period_effects", label:"Period effects", type:"text"},
-    {id:"sequence_order", label:"Sequence order", type:"text"},
-    {id:"paired_analysis", label:"Paired analysis used", type:"text"},
+    {id:"period_effects",    label:"Period effects",          type:"text"},
+    {id:"sequence_order",    label:"Sequence order",          type:"text"},
+    {id:"paired_analysis",   label:"Paired analysis used",   type:"text"},
   ],
   "Non-Randomized Trial": [
-    {id:"concurrent_control_confirmed", label:"Concurrent control confirmed", type:"text"},
-    {id:"allocation_mechanism", label:"Allocation mechanism", type:"textarea"},
-    {id:"baseline_comparability", label:"Baseline comparability", type:"textarea"},
-    {id:"confounding_control", label:"Confounding control method", type:"text"},
-    {id:"blinding", label:"Blinding", type:"text"},
+    {id:"concurrent_control_confirmed", label:"Concurrent control confirmed",  type:"text"},
+    {id:"allocation_mechanism",         label:"Allocation mechanism",          type:"textarea"},
+    {id:"baseline_comparability",       label:"Baseline comparability",        type:"textarea"},
+    {id:"confounding_control",          label:"Confounding control method",    type:"text"},
+    {id:"blinding",                     label:"Blinding",                      type:"text"},
   ],
   "Single-Arm Trial": [
-    {id:"primary_endpoint_prespecified", label:"Primary endpoint pre-specified", type:"text"},
-    {id:"inclusion_exclusion_criteria", label:"Inclusion/exclusion criteria", type:"textarea"},
-    {id:"comparator_historical_reference", label:"Historical reference or benchmark", type:"text"},
-    {id:"consecutive_enrolment", label:"Consecutive enrolment", type:"text"},
+    {id:"primary_endpoint_prespecified",     label:"Primary endpoint pre-specified",    type:"text"},
+    {id:"inclusion_exclusion_criteria",      label:"Inclusion/exclusion criteria",      type:"textarea"},
+    {id:"comparator_historical_reference",   label:"Historical reference or benchmark", type:"text"},
+    {id:"consecutive_enrolment",             label:"Consecutive enrolment",             type:"text"},
   ],
   "Dose-Escalation Study": [
-    {id:"escalation_scheme", label:"Escalation scheme (3+3/CRM/BOIN)", type:"text"},
-    {id:"dlt_definition", label:"DLT definition", type:"textarea"},
-    {id:"dose_levels", label:"Dose levels evaluated", type:"text"},
-    {id:"mtd_declared", label:"MTD declared", type:"text"},
-    {id:"rp2d", label:"RP2D selected", type:"text"},
-    {id:"expansion_cohort", label:"Expansion cohort included", type:"text"},
-    {id:"pk_pd_reported", label:"PK/PD data reported", type:"text"},
+    {id:"escalation_scheme",  label:"Escalation scheme (3+3/CRM/BOIN)", type:"text"},
+    {id:"dlt_definition",     label:"DLT definition",                   type:"textarea"},
+    {id:"dose_levels",        label:"Dose levels evaluated",            type:"text"},
+    {id:"mtd_declared",       label:"MTD declared",                     type:"text"},
+    {id:"rp2d",               label:"RP2D selected",                    type:"text"},
+    {id:"expansion_cohort",   label:"Expansion cohort included",        type:"text"},
+    {id:"pk_pd_reported",     label:"PK/PD data reported",              type:"text"},
   ],
   "Interrupted Time Series": [
-    {id:"n_data_points_pre", label:"N data points pre-intervention", type:"text"},
-    {id:"n_data_points_post", label:"N data points post-intervention", type:"text"},
-    {id:"intervention_date", label:"Intervention date", type:"text"},
-    {id:"control_series", label:"Control series present", type:"text"},
-    {id:"statistical_method", label:"Statistical method (seg. regression/ARIMA)", type:"text"},
-    {id:"level_change", label:"Level change estimate (CI)", type:"text"},
-    {id:"slope_change", label:"Slope change estimate (CI)", type:"text"},
-    {id:"autocorrelation_addressed", label:"Autocorrelation addressed", type:"text"},
-    {id:"seasonality_adjustment", label:"Seasonality adjustment", type:"text"},
-    {id:"concurrent_events", label:"Concurrent events / confounders", type:"textarea"},
+    {id:"n_data_points_pre",       label:"N data points pre-intervention",           type:"text"},
+    {id:"n_data_points_post",      label:"N data points post-intervention",          type:"text"},
+    {id:"intervention_date",       label:"Intervention date",                        type:"text"},
+    {id:"control_series",          label:"Control series present",                   type:"text"},
+    {id:"statistical_method",      label:"Statistical method (seg. regression/ARIMA)", type:"text"},
+    {id:"level_change",            label:"Level change estimate (CI)",               type:"text"},
+    {id:"slope_change",            label:"Slope change estimate (CI)",               type:"text"},
+    {id:"autocorrelation_addressed", label:"Autocorrelation addressed",              type:"text"},
+    {id:"seasonality_adjustment",  label:"Seasonality adjustment",                   type:"text"},
+    {id:"concurrent_events",       label:"Concurrent events / confounders",          type:"textarea"},
   ],
   "Difference-in-Differences": [
-    {id:"exogenous_event", label:"Exogenous event exploited", type:"textarea"},
-    {id:"parallel_trends_evidence", label:"Parallel trends evidence", type:"textarea"},
-    {id:"n_pre_period_points", label:"N pre-period time points", type:"text"},
-    {id:"interaction_term", label:"Post × Treatment estimate (CI)", type:"text"},
-    {id:"common_shocks", label:"Common shocks controlled", type:"text"},
-    {id:"staggered_adoption", label:"Staggered adoption", type:"text"},
+    {id:"exogenous_event",        label:"Exogenous event exploited",       type:"textarea"},
+    {id:"parallel_trends_evidence", label:"Parallel trends evidence",      type:"textarea"},
+    {id:"n_pre_period_points",    label:"N pre-period time points",        type:"text"},
+    {id:"interaction_term",       label:"Post × Treatment estimate (CI)",  type:"text"},
+    {id:"common_shocks",          label:"Common shocks controlled",        type:"text"},
+    {id:"staggered_adoption",     label:"Staggered adoption",              type:"text"},
   ],
   "Regression Discontinuity": [
-    {id:"running_variable", label:"Running variable", type:"text"},
-    {id:"cutoff_value", label:"Cutoff value", type:"text"},
-    {id:"sharp_vs_fuzzy", label:"Sharp vs fuzzy design", type:"text"},
-    {id:"bandwidth_selection", label:"Bandwidth selection method", type:"text"},
-    {id:"manipulation_testing", label:"Manipulation testing (McCrary)", type:"text"},
-    {id:"continuity_plots", label:"Continuity plots present", type:"text"},
+    {id:"running_variable",       label:"Running variable",                type:"text"},
+    {id:"cutoff_value",           label:"Cutoff value",                    type:"text"},
+    {id:"sharp_vs_fuzzy",         label:"Sharp vs fuzzy design",           type:"text"},
+    {id:"bandwidth_selection",    label:"Bandwidth selection method",      type:"text"},
+    {id:"manipulation_testing",   label:"Manipulation testing (McCrary)",  type:"text"},
+    {id:"continuity_plots",       label:"Continuity plots present",        type:"text"},
   ],
   "Cohort Study": [
-    {id:"exposure_definition", label:"Exposure definition", type:"textarea"},
-    {id:"exposure_measurement", label:"Exposure measurement", type:"text"},
-    {id:"comparator_group", label:"Comparator group definition", type:"textarea"},
-    {id:"outcome_ascertainment", label:"Outcome ascertainment", type:"text"},
-    {id:"confounders_measured", label:"Confounders measured & adjusted", type:"textarea"},
-    {id:"adjustment_method", label:"Adjustment method", type:"text"},
-    {id:"loss_to_follow_up", label:"Loss to follow-up", type:"text"},
-    {id:"immortal_time_bias", label:"Immortal time bias assessment", type:"textarea"},
+    {id:"exposure_definition",    label:"Exposure definition",             type:"textarea"},
+    {id:"exposure_measurement",   label:"Exposure measurement",           type:"text"},
+    {id:"comparator_group",       label:"Comparator group definition",    type:"textarea"},
+    {id:"outcome_ascertainment",  label:"Outcome ascertainment",          type:"text"},
+    {id:"confounders_measured",   label:"Confounders measured & adjusted", type:"textarea"},
+    {id:"adjustment_method",      label:"Adjustment method",              type:"text"},
+    {id:"loss_to_follow_up",      label:"Loss to follow-up",              type:"text"},
+    {id:"immortal_time_bias",     label:"Immortal time bias assessment",  type:"textarea"},
   ],
   "Case-Control": [
-    {id:"case_definition", label:"Case definition", type:"textarea"},
-    {id:"case_source", label:"Case source", type:"text"},
-    {id:"control_selection", label:"Control selection", type:"textarea"},
-    {id:"matching", label:"Matching variables & ratio", type:"text"},
-    {id:"exposure_ascertainment", label:"Exposure ascertainment", type:"text"},
-    {id:"recall_bias_risk", label:"Recall bias risk", type:"text"},
+    {id:"case_definition",        label:"Case definition",                type:"textarea"},
+    {id:"case_source",            label:"Case source",                    type:"text"},
+    {id:"control_selection",      label:"Control selection",              type:"textarea"},
+    {id:"matching",               label:"Matching variables & ratio",     type:"text"},
+    {id:"exposure_ascertainment", label:"Exposure ascertainment",         type:"text"},
+    {id:"recall_bias_risk",       label:"Recall bias risk",               type:"text"},
+  ],
+  "Case-Crossover": [
+    {id:"case_definition_ccx",    label:"Case definition",                        type:"textarea"},
+    {id:"exposure_definition_ccx", label:"Exposure definition",                   type:"textarea"},
+    {id:"hazard_period",          label:"Hazard period definition & length",       type:"text"},
+    {id:"control_period",         label:"Control period definition & length",      type:"text"},
+    {id:"induction_period",       label:"Induction / washout period",             type:"text"},
+    {id:"temporal_direction",     label:"Bidirectional vs unidirectional",         type:"text"},
+    {id:"exposure_variability",   label:"Exposure variability rationale",          type:"text"},
+    {id:"conditional_logistic",   label:"Conditional logistic regression used",    type:"text"},
+    {id:"self_selection_bias",    label:"Self-selection / event-driven bias assessment", type:"text"},
   ],
   "Diagnostic Accuracy": [
-    {id:"index_test", label:"Index test", type:"textarea"},
-    {id:"reference_standard", label:"Reference standard", type:"textarea"},
-    {id:"blinding_index_to_reference", label:"Blinding — index to reference", type:"text"},
-    {id:"blinding_reference_to_index", label:"Blinding — reference to index", type:"text"},
-    {id:"two_by_two_table", label:"2×2 table (TP/FP/FN/TN)", type:"text"},
-    {id:"spectrum_of_patients", label:"Spectrum of patients", type:"textarea"},
-    {id:"verification_bias", label:"Verification bias", type:"text"},
-    {id:"threshold_effects", label:"Threshold / ROC analysis", type:"text"},
-    {id:"flow_and_timing", label:"Flow and timing", type:"text"},
+    {id:"index_test",                    label:"Index test",                         type:"textarea"},
+    {id:"reference_standard",            label:"Reference standard",                type:"textarea"},
+    {id:"blinding_index_to_reference",   label:"Blinding — index to reference",     type:"text"},
+    {id:"blinding_reference_to_index",   label:"Blinding — reference to index",     type:"text"},
+    {id:"two_by_two_table",              label:"2×2 table (TP/FP/FN/TN)",          type:"text"},
+    {id:"spectrum_of_patients",          label:"Spectrum of patients",              type:"textarea"},
+    {id:"verification_bias",             label:"Verification bias",                 type:"text"},
+    {id:"threshold_effects",             label:"Threshold / ROC analysis",          type:"text"},
+    {id:"flow_and_timing",               label:"Flow and timing",                   type:"text"},
   ],
   "Prognostic Factor Study": [
-    {id:"prognostic_factor", label:"Prognostic factor & measurement", type:"textarea"},
-    {id:"outcome_definition", label:"Outcome definition & measurement", type:"textarea"},
-    {id:"study_participation", label:"Study participation (QUIPS D1)", type:"text"},
-    {id:"study_attrition", label:"Study attrition (QUIPS D2)", type:"text"},
-    {id:"pf_measurement", label:"PF measurement (QUIPS D3)", type:"text"},
-    {id:"confounding_control", label:"Confounders controlled (QUIPS D5)", type:"textarea"},
-    {id:"statistical_analysis", label:"Statistical analysis (QUIPS D6)", type:"textarea"},
+    {id:"prognostic_factor",      label:"Prognostic factor & measurement",  type:"textarea"},
+    {id:"outcome_definition",     label:"Outcome definition & measurement", type:"textarea"},
+    {id:"study_participation",    label:"Study participation (QUIPS D1)",   type:"text"},
+    {id:"study_attrition",        label:"Study attrition (QUIPS D2)",       type:"text"},
+    {id:"pf_measurement",         label:"PF measurement (QUIPS D3)",        type:"text"},
+    {id:"confounding_control",    label:"Confounders controlled (QUIPS D5)", type:"textarea"},
+    {id:"statistical_analysis",   label:"Statistical analysis (QUIPS D6)",  type:"textarea"},
   ],
   "Prediction Model Study": [
-    {id:"predictors_candidate", label:"Candidate predictors", type:"textarea"},
-    {id:"predictor_selection_method", label:"Predictor selection method", type:"text"},
-    {id:"model_type", label:"Model type (Cox/logistic/etc)", type:"text"},
-    {id:"discrimination", label:"Discrimination (C-statistic / AUC)", type:"text"},
-    {id:"calibration", label:"Calibration (H-L test / plot)", type:"text"},
-    {id:"model_presentation", label:"Model presentation (nomogram/calculator)", type:"text"},
-    {id:"model_stage", label:"Model stage (development/validation/update)", type:"text"},
+    {id:"predictors_candidate",       label:"Candidate predictors",                    type:"textarea"},
+    {id:"predictor_selection_method", label:"Predictor selection method",              type:"text"},
+    {id:"model_type",                 label:"Model type (Cox/logistic/etc)",           type:"text"},
+    {id:"discrimination",             label:"Discrimination (C-statistic / AUC)",      type:"text"},
+    {id:"calibration",                label:"Calibration (H-L test / plot)",           type:"text"},
+    {id:"model_presentation",         label:"Model presentation (nomogram/calculator)", type:"text"},
+    {id:"model_stage",                label:"Model stage (development/validation/update)", type:"text"},
   ],
   "SR without Meta-Analysis": [
-    {id:"search_strategy", label:"Search strategy (databases, dates)", type:"textarea"},
-    {id:"inclusion_criteria", label:"Inclusion criteria", type:"textarea"},
-    {id:"study_selection", label:"Study selection process", type:"text"},
-    {id:"data_extraction", label:"Data extraction method", type:"text"},
-    {id:"included_studies_n", label:"N included studies", type:"text"},
-    {id:"rob_tool_used", label:"RoB tool used on included studies", type:"text"},
-    {id:"synthesis_method", label:"Synthesis method", type:"textarea"},
-    {id:"grade_assessment", label:"GRADE assessment", type:"text"},
-    {id:"prisma_flow", label:"PRISMA flow diagram", type:"text"},
+    {id:"search_strategy",    label:"Search strategy (databases, dates)", type:"textarea"},
+    {id:"inclusion_criteria", label:"Inclusion criteria",                 type:"textarea"},
+    {id:"study_selection",    label:"Study selection process",            type:"text"},
+    {id:"data_extraction",    label:"Data extraction method",             type:"text"},
+    {id:"included_studies_n", label:"N included studies",                 type:"text"},
+    {id:"rob_tool_used",      label:"RoB tool used on included studies",  type:"text"},
+    {id:"synthesis_method",   label:"Synthesis method",                   type:"textarea"},
+    {id:"grade_assessment",   label:"GRADE assessment",                   type:"text"},
+    {id:"prisma_flow",        label:"PRISMA flow diagram",                type:"text"},
   ],
   "SR with Meta-Analysis": [
-    {id:"search_strategy", label:"Search strategy", type:"textarea"},
-    {id:"inclusion_criteria", label:"Inclusion criteria", type:"textarea"},
-    {id:"included_studies_n", label:"N included studies", type:"text"},
-    {id:"effect_measure", label:"Effect measure (HR/OR/MD)", type:"text"},
-    {id:"pooled_estimate", label:"Pooled estimate (CI)", type:"text"},
-    {id:"pooling_model", label:"Pooling model (fixed/random)", type:"text"},
-    {id:"heterogeneity", label:"Heterogeneity (I², τ², Q)", type:"text"},
-    {id:"publication_bias", label:"Publication bias assessment", type:"text"},
-    {id:"sensitivity_analyses", label:"Sensitivity analyses", type:"textarea"},
-    {id:"subgroup_analyses", label:"Subgroup analyses", type:"textarea"},
-    {id:"grade_assessment", label:"GRADE certainty", type:"text"},
-    {id:"prisma_flow", label:"PRISMA flow diagram", type:"text"},
+    {id:"search_strategy",    label:"Search strategy",                   type:"textarea"},
+    {id:"inclusion_criteria", label:"Inclusion criteria",                type:"textarea"},
+    {id:"included_studies_n", label:"N included studies",                type:"text"},
+    {id:"effect_measure",     label:"Effect measure (HR/OR/MD)",         type:"text"},
+    {id:"pooled_estimate",    label:"Pooled estimate (CI)",               type:"text"},
+    {id:"pooling_model",      label:"Pooling model (fixed/random)",       type:"text"},
+    {id:"heterogeneity",      label:"Heterogeneity (I², τ², Q)",          type:"text"},
+    {id:"publication_bias",   label:"Publication bias assessment",        type:"text"},
+    {id:"sensitivity_analyses", label:"Sensitivity analyses",            type:"textarea"},
+    {id:"subgroup_analyses",  label:"Subgroup analyses",                  type:"textarea"},
+    {id:"grade_assessment",   label:"GRADE certainty",                    type:"text"},
+    {id:"prisma_flow",        label:"PRISMA flow diagram",                type:"text"},
   ],
 };
-// Alias types that share fields
+
+// Aliases and extras
 TYPE_FIELDS["Stepped-Wedge Cluster RCT"] = TYPE_FIELDS["Cluster Randomized Trial"];
 TYPE_FIELDS["Uncontrolled Before-After"] = [
-  {id:"pre_measurement", label:"Pre-intervention measurement", type:"text"},
-  {id:"post_measurement", label:"Post-intervention measurement", type:"text"},
-  {id:"secular_trend_risk", label:"Secular trend risk", type:"text"},
-  {id:"regression_to_mean_risk", label:"Regression to mean risk", type:"text"},
-  {id:"concurrent_events", label:"Concurrent events", type:"textarea"},
+  {id:"pre_measurement",          label:"Pre-intervention measurement",  type:"text"},
+  {id:"post_measurement",         label:"Post-intervention measurement", type:"text"},
+  {id:"secular_trend_risk",       label:"Secular trend risk",            type:"text"},
+  {id:"regression_to_mean_risk",  label:"Regression to mean risk",       type:"text"},
+  {id:"concurrent_events",        label:"Concurrent events",             type:"textarea"},
 ];
 TYPE_FIELDS["Cross-Sectional (Analytical)"] = [
-  {id:"sampling_method", label:"Sampling method", type:"text"},
-  {id:"response_rate", label:"Response rate", type:"text"},
+  {id:"sampling_method",               label:"Sampling method",         type:"text"},
+  {id:"response_rate",                 label:"Response rate",           type:"text"},
   {id:"exposure_outcome_simultaneity", label:"Simultaneity acknowledged", type:"text"},
-  {id:"adjustment_method", label:"Adjustment method", type:"text"},
+  {id:"adjustment_method",             label:"Adjustment method",       type:"text"},
 ];
 TYPE_FIELDS["Mendelian Randomization"] = [
-  {id:"instrument_variants", label:"Instrument variants (SNPs, GWAS source)", type:"textarea"},
-  {id:"f_statistic", label:"F-statistic (instrument strength)", type:"text"},
-  {id:"mr_design", label:"MR design (1-sample/2-sample/MV)", type:"text"},
-  {id:"sample_overlap", label:"Sample overlap", type:"text"},
-  {id:"pleiotropy_tests", label:"Pleiotropy tests (Egger/PRESSO/WM)", type:"textarea"},
-  {id:"exclusion_restriction", label:"Exclusion restriction argument", type:"textarea"},
+  {id:"instrument_variants",    label:"Instrument variants (SNPs, GWAS source)", type:"textarea"},
+  {id:"f_statistic",            label:"F-statistic (instrument strength)",       type:"text"},
+  {id:"mr_design",              label:"MR design (1-sample/2-sample/MV)",        type:"text"},
+  {id:"sample_overlap",         label:"Sample overlap",                          type:"text"},
+  {id:"pleiotropy_tests",       label:"Pleiotropy tests (Egger/PRESSO/WM)",      type:"textarea"},
+  {id:"exclusion_restriction",  label:"Exclusion restriction argument",          type:"textarea"},
 ];
-TYPE_FIELDS["Case-Crossover"] = [
-  {id:"case_definition_ccx",    label:"Case definition",                   type:"textarea"},
-  {id:"exposure_definition_ccx",label:"Exposure definition",               type:"textarea"},
-  {id:"hazard_period",          label:"Hazard period definition & length",  type:"text"},
-  {id:"control_period",         label:"Control period definition & length", type:"text"},
-  {id:"induction_period",       label:"Induction / washout period",         type:"text"},
-  {id:"temporal_direction",     label:"Bidirectional vs unidirectional",    type:"text"},
-  {id:"exposure_variability",   label:"Exposure variability rationale",     type:"textarea"},
-  {id:"conditional_logistic",   label:"Conditional logistic regression used",type:"text"},
-  {id:"self_selection_bias",    label:"Self-selection / event-driven bias assessment", type:"textarea"},
-];
-
 TYPE_FIELDS["Economic Evaluation"] = [
-  {id:"evaluation_type", label:"Evaluation type (CEA/CUA/CBA/BIA)", type:"text"},
-  {id:"perspective", label:"Perspective (societal/payer/etc)", type:"text"},
-  {id:"time_horizon", label:"Time horizon", type:"text"},
-  {id:"discount_rate", label:"Discount rate", type:"text"},
-  {id:"model_type", label:"Model type (Markov/decision tree/etc)", type:"text"},
-  {id:"cost_inputs", label:"Cost inputs", type:"textarea"},
-  {id:"effectiveness_source", label:"Effectiveness data source", type:"text"},
-  {id:"icer", label:"ICER (WTP threshold)", type:"text"},
-  {id:"sensitivity_analysis", label:"Sensitivity analysis (PSA/tornado)", type:"text"},
+  {id:"evaluation_type",        label:"Evaluation type (CEA/CUA/CBA/BIA)", type:"text"},
+  {id:"perspective",            label:"Perspective (societal/payer/etc)",  type:"text"},
+  {id:"time_horizon",           label:"Time horizon",                      type:"text"},
+  {id:"discount_rate",          label:"Discount rate",                     type:"text"},
+  {id:"model_type",             label:"Model type (Markov/decision tree/etc)", type:"text"},
+  {id:"cost_inputs",            label:"Cost inputs",                       type:"textarea"},
+  {id:"effectiveness_source",   label:"Effectiveness data source",         type:"text"},
+  {id:"icer",                   label:"ICER (WTP threshold)",              type:"text"},
+  {id:"sensitivity_analysis",   label:"Sensitivity analysis (PSA/tornado)", type:"text"},
 ];
 TYPE_FIELDS["Guideline / Consensus"] = [
-  {id:"guideline_organization", label:"Issuing organisation", type:"text"},
-  {id:"panel_composition", label:"Panel composition & COI management", type:"textarea"},
-  {id:"evidence_base", label:"Evidence base (SR underpinning)", type:"textarea"},
-  {id:"grade_used", label:"GRADE or equivalent used", type:"text"},
-  {id:"recommendations", label:"Key recommendations (strength + certainty)", type:"textarea"},
-  {id:"updating_plan", label:"Update plan / living status", type:"text"},
+  {id:"guideline_organization", label:"Issuing organisation",                     type:"text"},
+  {id:"panel_composition",      label:"Panel composition & COI management",       type:"textarea"},
+  {id:"evidence_base",          label:"Evidence base (SR underpinning)",          type:"textarea"},
+  {id:"grade_used",             label:"GRADE or equivalent used",                 type:"text"},
+  {id:"recommendations",        label:"Key recommendations (strength + certainty)", type:"textarea"},
+  {id:"updating_plan",          label:"Update plan / living status",              type:"text"},
 ];
 TYPE_FIELDS["Qualitative Research"] = [
-  {id:"methodology", label:"Qualitative methodology", type:"text"},
-  {id:"data_collection", label:"Data collection method", type:"text"},
-  {id:"sampling_strategy", label:"Sampling strategy", type:"text"},
-  {id:"data_saturation", label:"Thematic saturation", type:"text"},
-  {id:"reflexivity", label:"Researcher reflexivity", type:"textarea"},
-  {id:"themes", label:"Major themes identified", type:"textarea"},
+  {id:"methodology",        label:"Qualitative methodology",    type:"text"},
+  {id:"data_collection",    label:"Data collection method",     type:"text"},
+  {id:"sampling_strategy",  label:"Sampling strategy",          type:"text"},
+  {id:"data_saturation",    label:"Thematic saturation",        type:"text"},
+  {id:"reflexivity",        label:"Researcher reflexivity",     type:"textarea"},
+  {id:"themes",             label:"Major themes identified",    type:"textarea"},
 ];
 
 // Layer 3 modifier fields (always shown)
 const MODIFIER_FIELDS = [
-  {id:"clinical_trial_phase", label:"Clinical trial phase", type:"select", opts:["","Phase I","Phase I/II","Phase II","Phase II/III","Phase III","Phase IV","Not applicable"]},
-  {id:"regulatory_context", label:"Regulatory context", type:"text"},
-  {id:"registration_number", label:"Registry ID", type:"text"},
-  {id:"industry_sponsored", label:"Industry-sponsored", type:"select", opts:["","Yes","No","Partial"]},
-  {id:"data_source_type", label:"Data source type", type:"text"},
-  {id:"database_name", label:"Database name", type:"text"},
-  {id:"adaptive_design", label:"Adaptive design", type:"select", opts:["","Yes","No"]},
-  {id:"pragmatic_vs_explanatory", label:"Pragmatic vs explanatory", type:"select", opts:["","Pragmatic","Mostly pragmatic","Balanced","Mostly explanatory","Explanatory"]},
-  {id:"trial_framework", label:"Trial framework", type:"select", opts:["","Superiority","Non-inferiority","Equivalence"]},
-  {id:"target_trial_emulation", label:"Target trial emulation", type:"select", opts:["","Yes","No"]},
-  {id:"pilot_or_feasibility", label:"Pilot / feasibility study", type:"select", opts:["","Yes","No"]},
+  {id:"clinical_trial_phase",     label:"Clinical trial phase",       type:"select", opts:["","Phase I","Phase I/II","Phase II","Phase II/III","Phase III","Phase IV","Not applicable"]},
+  {id:"regulatory_context",       label:"Regulatory context",         type:"text"},
+  {id:"registration_number",      label:"Registry ID",                type:"text"},
+  {id:"industry_sponsored",       label:"Industry-sponsored",         type:"select", opts:["","Yes","No","Partial"]},
+  {id:"data_source_type",         label:"Data source type",           type:"text"},
+  {id:"database_name",            label:"Database name",              type:"text"},
+  {id:"adaptive_design",          label:"Adaptive design",            type:"select", opts:["","Yes","No"]},
+  {id:"pragmatic_vs_explanatory", label:"Pragmatic vs explanatory",   type:"select", opts:["","Pragmatic","Mostly pragmatic","Balanced","Mostly explanatory","Explanatory"]},
+  {id:"trial_framework",          label:"Trial framework",            type:"select", opts:["","Superiority","Non-inferiority","Equivalence"]},
+  {id:"target_trial_emulation",   label:"Target trial emulation",     type:"select", opts:["","Yes","No"]},
+  {id:"pilot_or_feasibility",     label:"Pilot / feasibility study",  type:"select", opts:["","Yes","No"]},
 ];
 
-// Span highlight colour palette per field group
 const FIELD_COLOURS = [
   "#4fc3f7","#81c784","#ffb74d","#f48fb1","#ce93d8",
   "#80cbc4","#a5d6a7","#fff176","#ffcc80","#ef9a9a",
@@ -882,12 +921,15 @@ let pdfDoc = null;
 let currentPage = 1;
 let totalPages = 1;
 let zoomLevel = 1.2;
-let activeField = null;         // id of field currently receiving span links
-let activeFieldBtn = null;      // button element
-let pendingSelection = null;    // {text, page, x0,y0,x1,y1} from current text selection
-let spans = [];                 // [{field_name, page, text, x0,y0,x1,y1}]
+let activeField = null;
+let activeFieldBtn = null;
+let pendingSelection = null;
+let spans = [];
 let reviewerAction = "Confirm";
-let pipelinePredictions = {};   // baseline values (from AI fill or last saved annotation)
+let pipelinePredictions = {};   // baseline from AI auto-fill
+let allPapers = [];             // [{id, filename, annotated_by, project_id}]
+let allProjects = [];           // [{id, name}]
+let collapsedProjects = new Set();
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -925,7 +967,6 @@ function buildField(f) {
   el.setAttribute('data-field', f.id);
   div.appendChild(el);
 
-  // Span tag container
   const stc = document.createElement('div');
   stc.id = 'spans-' + f.id;
   div.appendChild(stc);
@@ -939,16 +980,7 @@ function buildSection(fields, container) {
 }
 
 buildSection(UNIVERSAL_FIELDS, document.getElementById('universal-fields'));
-buildSection(MODIFIER_FIELDS, document.getElementById('modifier-fields'));
-
-// Live correction highlight updates whenever any form field changes
-document.addEventListener('input', e => {
-  if (e.target.id && e.target.id.startsWith('f-') &&
-      (reviewerAction === 'Correct' || reviewerAction === 'Flag')) {
-    highlightCorrections();
-    updateCorrectionSummary();
-  }
-});
+buildSection(MODIFIER_FIELDS,  document.getElementById('modifier-fields'));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TAXONOMY DROPDOWNS
@@ -977,7 +1009,18 @@ function onSubcatChange() {
 }
 
 function onStudyTypeChange() {
-  updateTypeSpecific(document.getElementById('f-study_type').value);
+  const studyType = document.getElementById('f-study_type').value;
+  updateTypeSpecific(studyType);
+  // Enable/disable auto-fill button
+  const btn = document.getElementById('autofill-btn');
+  const hint = document.getElementById('autofill-hint');
+  if (btn) {
+    const ready = !!(studyType && currentPaperId);
+    btn.disabled = !ready;
+    hint.textContent = !studyType ? 'Select a study type above to enable'
+      : !currentPaperId ? 'Select a paper first'
+      : 'Ready to extract';
+  }
 }
 
 function updateTypeSpecific(studyType) {
@@ -998,7 +1041,6 @@ function updateTypeSpecific(studyType) {
 // ACTIVE FIELD & SPAN LINKING
 // ═══════════════════════════════════════════════════════════════════════════
 function setActiveField(fieldId, btn) {
-  // Toggle off if same field clicked again
   if (activeField === fieldId) {
     clearActiveField();
     return;
@@ -1019,8 +1061,17 @@ function setActiveField(fieldId, btn) {
   document.getElementById('active-field-banner').style.display = 'block';
   document.getElementById('active-field-banner').textContent = `📎 Select text in PDF to link → "${fieldId}"`;
 
-  // If there's a pending selection, show link button
   if (pendingSelection) showLinkBtn();
+
+  // ── Scroll PDF to span if this field is already linked ──
+  const linkedSpan = spans.find(s => s.field_name === fieldId);
+  if (linkedSpan) {
+    const pageEl = document.querySelector(`.page-wrapper[data-page="${linkedSpan.page}"]`);
+    if (pageEl) {
+      pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => flashSpanBox(linkedSpan), 450);
+    }
+  }
 }
 
 function clearActiveField() {
@@ -1040,13 +1091,24 @@ function isFieldLinked(fieldId) {
   return spans.some(s => s.field_name === fieldId);
 }
 
+function flashSpanBox(span) {
+  const overlay = document.getElementById(`overlay-p${span.page}`);
+  if (!overlay) return;
+  const box = overlay.querySelector(`.span-box[data-field="${span.field_name}"]`);
+  if (box) {
+    box.classList.remove('span-flash'); // reset if already animating
+    void box.offsetWidth;              // reflow to restart animation
+    box.classList.add('span-flash');
+    setTimeout(() => box.classList.remove('span-flash'), 1600);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TEXT SELECTION IN PDF
 // ═══════════════════════════════════════════════════════════════════════════
 document.addEventListener('mouseup', handleMouseUp);
 
 function handleMouseUp(e) {
-  // Ignore clicks inside link button itself
   if (e.target.id === 'link-btn' || e.target.closest('#link-btn')) return;
 
   const sel = window.getSelection();
@@ -1057,7 +1119,6 @@ function handleMouseUp(e) {
     return;
   }
 
-  // Check the selection is within a PDF text layer
   const range = sel.rangeCount ? sel.getRangeAt(0) : null;
   if (!range) return;
   const container = range.commonAncestorContainer;
@@ -1066,11 +1127,9 @@ function handleMouseUp(e) {
     : container.parentElement?.closest('.textLayer');
   if (!textLayer) { pendingSelection = null; hideLinkBtn(); return; }
 
-  // Find page number
   const pageWrapper = textLayer.closest('.page-wrapper');
   const pageNum = pageWrapper ? parseInt(pageWrapper.dataset.page) : currentPage;
 
-  // Get bounding rect of selection relative to page canvas
   const rects = range.getClientRects();
   const canvasEl = pageWrapper?.querySelector('canvas');
   const canvasRect = canvasEl ? canvasEl.getBoundingClientRect() : null;
@@ -1108,7 +1167,6 @@ function hideLinkBtn() {
 function linkSelection() {
   if (!pendingSelection || !activeField) return;
   const span = { ...pendingSelection, field_name: activeField };
-  // Remove previous span for same field (one span per field)
   spans = spans.filter(s => s.field_name !== activeField);
   spans.push(span);
   window.getSelection()?.removeAllRanges();
@@ -1116,7 +1174,6 @@ function linkSelection() {
   hideLinkBtn();
   renderSpanTags();
   renderHighlights();
-  // Update anchor button
   if (activeFieldBtn) {
     activeFieldBtn.textContent = 'linked ✓';
     activeFieldBtn.classList.remove('active');
@@ -1129,13 +1186,11 @@ function removeSpan(fieldName) {
   spans = spans.filter(s => s.field_name !== fieldName);
   renderSpanTags();
   renderHighlights();
-  // Reset button
   const btn = document.querySelector(`.field-anchor-btn[data-field="${fieldName}"]`);
   if (btn) { btn.textContent = 'anchor'; btn.classList.remove('linked','active'); }
 }
 
 function renderSpanTags() {
-  // Clear all span tag containers first
   document.querySelectorAll('[id^="spans-"]').forEach(c => c.innerHTML = '');
   spans.forEach(s => {
     const container = document.getElementById('spans-' + s.field_name);
@@ -1151,11 +1206,9 @@ function renderSpanTags() {
       <button class="st-del" onclick="removeSpan('${s.field_name}')" title="Remove link">✕</button>`;
     container.appendChild(tag);
 
-    // Auto-populate the field input if empty
     const el = document.getElementById('f-' + s.field_name);
     if (el && !el.value) el.value = s.text;
 
-    // Update anchor button
     const btn = document.querySelector(`.field-anchor-btn[data-field="${s.field_name}"]`);
     if (btn) { btn.textContent = 'linked ✓'; btn.classList.add('linked'); btn.classList.remove('active'); }
   });
@@ -1169,7 +1222,20 @@ async function loadPdf(paperId, filename) {
   currentFilename = filename;
   document.getElementById('save-status').textContent = filename;
   spans = [];
+  pipelinePredictions = {};
   renderSpanTags();
+  renderSidebar(); // update active paper highlight
+
+  // Reset auto-fill UI
+  const afBtn = document.getElementById('autofill-btn');
+  if (afBtn) {
+    const st = document.getElementById('f-study_type').value;
+    afBtn.disabled = !st;
+    afBtn.textContent = 'Auto-fill from PDF';
+    document.getElementById('autofill-hint').textContent =
+      st ? 'Ready to extract' : 'Select a study type above to enable';
+    document.getElementById('autofill-loading').style.display = 'none';
+  }
 
   const url = `/api/papers/${paperId}/pdf`;
   try {
@@ -1202,16 +1268,13 @@ async function renderPage(pageNum, container) {
   wrapper.style.width = viewport.width + 'px';
   wrapper.style.height = viewport.height + 'px';
 
-  // Canvas
   const canvas = document.createElement('canvas');
   canvas.width  = viewport.width;
   canvas.height = viewport.height;
   wrapper.appendChild(canvas);
 
-  // Render PDF page
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-  // Text layer for selection
   const textDiv = document.createElement('div');
   textDiv.className = 'textLayer';
   textDiv.style.width  = viewport.width  + 'px';
@@ -1226,7 +1289,6 @@ async function renderPage(pageNum, container) {
     textDivs: [],
   }).promise;
 
-  // Span overlay
   const overlay = document.createElement('div');
   overlay.className = 'span-overlay';
   overlay.id = `overlay-p${pageNum}`;
@@ -1239,7 +1301,6 @@ async function renderPage(pageNum, container) {
 
 function renderHighlights() {
   if (!pdfDoc) return;
-  // Clear all overlays
   document.querySelectorAll('.span-overlay').forEach(o => o.innerHTML = '');
 
   spans.forEach(s => {
@@ -1249,6 +1310,7 @@ function renderHighlights() {
     const colour = getFieldColour(s.field_name);
     const box = document.createElement('div');
     box.className = 'span-box';
+    box.dataset.field = s.field_name;   // ← enables flashSpanBox lookup
     box.title = `${s.field_name}: "${s.text.substring(0,60)}"`;
     box.style.cssText = `
       left:${s.x0}px; top:${s.y0}px;
@@ -1286,7 +1348,6 @@ async function changeZoom(delta) {
   renderHighlights();
 }
 
-// Track current page by scroll position
 document.getElementById('pdf-scroll').addEventListener('scroll', () => {
   const wrappers = document.querySelectorAll('.page-wrapper');
   const scroll = document.getElementById('pdf-scroll');
@@ -1301,7 +1362,7 @@ document.getElementById('pdf-scroll').addEventListener('scroll', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FORM DATA
+// FORM DATA & CORRECTIONS TRACKING
 // ═══════════════════════════════════════════════════════════════════════════
 function getFormData() {
   const data = {};
@@ -1311,31 +1372,31 @@ function getFormData() {
   });
   data.reviewer_action = reviewerAction;
 
-  // Always persist the baseline so it survives page reload
-  data.pipeline_predictions_json = JSON.stringify(pipelinePredictions);
-
-  // Compute structured diff for Correct / Flag actions
+  // Compute structured diff against AI baseline
   const corrections = {};
-  Object.entries(pipelinePredictions).forEach(([k, baseline]) => {
-    const el = document.getElementById('f-' + k);
-    if (!el) return;
-    const current = el.value || '';
-    if (current !== baseline) {
-      corrections[k] = { from: baseline, to: current };
-    }
-  });
+  if (Object.keys(pipelinePredictions).length > 0) {
+    Object.entries(pipelinePredictions).forEach(([k, v]) => {
+      const current = data[k] || '';
+      if (current !== (v || '') && current !== '') {
+        corrections[k] = { from: v || '', to: current };
+      }
+    });
+  }
   data.corrections_json = JSON.stringify(corrections);
+  data.pipeline_predictions_json = JSON.stringify(pipelinePredictions);
 
   return data;
 }
 
 function setFormData(data) {
   if (!data) return;
-  // Restore baseline predictions so corrections can be recomputed after page reload
+
+  // Restore AI baseline if present
   if (data.pipeline_predictions_json) {
     try { pipelinePredictions = JSON.parse(data.pipeline_predictions_json); } catch(e) {}
   }
-  // Set major/sub/type first (triggers cascades)
+
+  // Cascade dropdowns first
   if (data.major_category) {
     const el = document.getElementById('f-major_category');
     el.value = data.major_category;
@@ -1358,80 +1419,378 @@ function setFormData(data) {
       if (el && v !== undefined) el.value = v;
     });
     if (data.reviewer_action) setAction(data.reviewer_action, false);
-    // Restore correction highlights if action was Correct/Flag
+    // Restore corrections highlighting on reload
     if (data.reviewer_action === 'Correct' || data.reviewer_action === 'Flag') {
-      highlightCorrections();
+      refreshCorrectionsUI();
+    } else if (Object.keys(pipelinePredictions).length > 0) {
+      // Re-apply amber borders for unmodified pre-filled fields
+      refreshPrefilledUI();
     }
   }, 50);
 }
 
+function refreshPrefilledUI() {
+  if (!Object.keys(pipelinePredictions).length) return;
+  Object.entries(pipelinePredictions).forEach(([k, v]) => {
+    const el = document.getElementById('f-' + k);
+    const row = document.getElementById('fr-' + k);
+    if (!el || !row) return;
+    if (el.value === (v || '')) {
+      row.classList.add('field-prefilled');
+    }
+  });
+}
+
+function refreshCorrectionsUI() {
+  document.querySelectorAll('.field-prefilled, .field-corrected').forEach(el => {
+    el.classList.remove('field-prefilled', 'field-corrected');
+  });
+  if (!Object.keys(pipelinePredictions).length) return;
+  Object.entries(pipelinePredictions).forEach(([k, v]) => {
+    const el = document.getElementById('f-' + k);
+    const row = document.getElementById('fr-' + k);
+    if (!el || !row) return;
+    const current = el.value || '';
+    const baseline = v || '';
+    if (current !== '' && current !== baseline) {
+      row.classList.add('field-corrected');
+    } else if (current !== '') {
+      row.classList.add('field-prefilled');
+    }
+  });
+}
+
 function setAction(action, visual=true) {
   reviewerAction = action;
-  if (visual) {
-    ['Confirm','Correct','Flag'].forEach(a => {
-      const btn = document.getElementById('btn-' + a.toLowerCase());
-      if (btn) btn.classList.toggle('action-btn-active', a === action);
+  if (!visual) return;
+  ['Confirm','Correct','Flag'].forEach(a => {
+    const btn = document.getElementById('btn-' + a.toLowerCase());
+    if (btn) btn.style.fontWeight = (a===action) ? '900' : '700';
+    if (btn) btn.style.outline = (a===action) ? '2px solid #1e293b' : 'none';
+  });
+  // Refresh correction highlights when action changes
+  if (action === 'Correct' || action === 'Flag') {
+    refreshCorrectionsUI();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI AUTO-FILL
+// ═══════════════════════════════════════════════════════════════════════════
+async function prefillFromPDF() {
+  if (!currentPaperId) return;
+  const studyType = document.getElementById('f-study_type').value;
+  if (!studyType) return;
+
+  const btn = document.getElementById('autofill-btn');
+  const hint = document.getElementById('autofill-hint');
+  const loading = document.getElementById('autofill-loading');
+
+  btn.disabled = true;
+  btn.textContent = 'Extracting…';
+  loading.style.display = 'block';
+  hint.style.display = 'none';
+
+  try {
+    const res = await fetch(`/api/papers/${currentPaperId}/prefill`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({study_type: studyType}),
     });
-  }
-  highlightCorrections();
-  updateCorrectionSummary();
-}
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('Auto-fill failed: ' + (err.detail || `HTTP ${res.status}`));
+      return;
+    }
+    const predictions = await res.json();
+    pipelinePredictions = predictions;
 
-function highlightCorrections() {
-  // Clear all correction markers first
-  document.querySelectorAll('.field-corrected').forEach(el => el.classList.remove('field-corrected'));
-  if (reviewerAction !== 'Correct' && reviewerAction !== 'Flag') return;
-  if (!Object.keys(pipelinePredictions).length) return;
-  Object.entries(pipelinePredictions).forEach(([k, baseline]) => {
-    const el = document.getElementById('f-' + k);
-    if (!el || el.tagName === 'SELECT') return;
-    if ((el.value || '') !== baseline) el.classList.add('field-corrected');
-  });
-}
+    // Clear existing amber/red borders
+    document.querySelectorAll('.field-prefilled, .field-corrected').forEach(el => {
+      el.classList.remove('field-prefilled', 'field-corrected');
+    });
 
-function updateCorrectionSummary() {
-  const el = document.getElementById('correction-summary');
-  if (!el) return;
-  if ((reviewerAction !== 'Correct' && reviewerAction !== 'Flag') || !Object.keys(pipelinePredictions).length) {
-    el.style.display = 'none'; return;
+    // Fill fields and mark amber
+    let filled = 0;
+    Object.entries(predictions).forEach(([k, v]) => {
+      const el = document.getElementById('f-' + k);
+      const row = document.getElementById('fr-' + k);
+      if (el && v) {
+        el.value = v;
+        filled++;
+        if (row) {
+          row.classList.add('field-prefilled');
+          el.addEventListener('input', () => {
+            row.classList.remove('field-prefilled');
+            if (reviewerAction === 'Correct' || reviewerAction === 'Flag') {
+              if (el.value !== (pipelinePredictions[k] || '')) {
+                row.classList.add('field-corrected');
+              }
+            }
+          }, {once: true});
+        }
+      }
+    });
+
+    btn.textContent = 'Re-fill from PDF';
+    hint.textContent = `${filled} fields extracted`;
+    hint.style.display = 'block';
+  } catch(e) {
+    alert('Auto-fill error: ' + e.message);
+    btn.textContent = 'Auto-fill from PDF';
+    hint.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    loading.style.display = 'none';
   }
-  const changed = Object.entries(pipelinePredictions).filter(([k]) => {
-    const fe = document.getElementById('f-' + k);
-    return fe && (fe.value || '') !== pipelinePredictions[k];
-  });
-  if (!changed.length) {
-    el.style.display = 'none'; return;
-  }
-  el.style.display = 'block';
-  el.innerHTML = `<span class="correction-count">${changed.length} field${changed.length>1?'s':''} corrected</span> from AI prediction: ` +
-    changed.map(([k]) => `<em>${k}</em>`).join(', ');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// API CALLS
+// PROJECT MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════
-async function loadPapers() {
-  const res = await fetch('/api/papers');
-  const papers = await res.json();
-  const list = document.getElementById('paper-list');
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderSidebar() {
+  const list = document.getElementById('project-list');
   list.innerHTML = '';
-  papers.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'paper-item' + (p.id===currentPaperId?' active':'');
-    div.onclick = () => { selectPaper(p); };
-    const done = p.annotated_by.length > 0;
-    div.innerHTML = `
-      <div class="pi-name" title="${p.filename}">${p.filename}</div>
-      <div class="pi-meta">${p.annotated_by.join(', ') || 'no annotations'}</div>
-      <span class="pi-chip ${done?'done':'none'}">${done?'annotated':'pending'}</span>`;
-    list.appendChild(div);
+
+  allProjects.forEach(proj => {
+    const projPapers = allPapers.filter(p => p.project_id === proj.id);
+    list.appendChild(buildProjectFolder(proj, projPapers));
   });
+
+  // Unassigned section
+  const unassigned = allPapers.filter(p => !p.project_id);
+  if (unassigned.length > 0 || allProjects.length === 0) {
+    list.appendChild(buildUnassigned(unassigned));
+  }
 }
 
-function selectPaper(p) {
-  document.querySelectorAll('.paper-item').forEach(el => el.classList.remove('active'));
-  event?.currentTarget?.classList.add('active');
-  loadPdf(p.id, p.filename);
+function buildProjectFolder(proj, papers) {
+  const collapsed = collapsedProjects.has(proj.id);
+  const folder = document.createElement('div');
+  folder.className = 'project-folder';
+
+  const header = document.createElement('div');
+  header.className = 'project-header';
+  header.innerHTML = `
+    <span class="project-arrow">${collapsed ? '▶' : '▼'}</span>
+    <span class="project-name-text" title="${escHtml(proj.name)}">${escHtml(proj.name)}</span>
+    <span class="project-count">${papers.length}</span>
+    <div class="project-actions">
+      <button class="proj-act-btn" title="Rename project"
+        onclick="renameProjectUI(event, ${proj.id})">✎</button>
+      <button class="proj-act-btn del" title="Delete project"
+        onclick="deleteProjectConfirm(event, ${proj.id})">✕</button>
+    </div>`;
+  header.addEventListener('click', () => toggleProject(proj.id));
+  folder.appendChild(header);
+
+  const papersDiv = document.createElement('div');
+  papersDiv.className = 'project-papers';
+  papersDiv.style.display = collapsed ? 'none' : 'block';
+  papers.forEach(p => papersDiv.appendChild(buildPaperItem(p)));
+  folder.appendChild(papersDiv);
+
+  return folder;
+}
+
+function buildUnassigned(papers) {
+  const collapsed = collapsedProjects.has('__unassigned__');
+  const folder = document.createElement('div');
+  folder.className = 'project-folder';
+
+  const header = document.createElement('div');
+  header.className = 'project-header';
+  header.innerHTML = `
+    <span class="project-arrow">${collapsed ? '▶' : '▼'}</span>
+    <span class="project-name-text unassigned">Unassigned</span>
+    <span class="project-count">${papers.length}</span>`;
+  header.addEventListener('click', () => toggleProject('__unassigned__'));
+  folder.appendChild(header);
+
+  const papersDiv = document.createElement('div');
+  papersDiv.className = 'project-papers';
+  papersDiv.style.display = collapsed ? 'none' : 'block';
+  papers.forEach(p => papersDiv.appendChild(buildPaperItem(p)));
+  folder.appendChild(papersDiv);
+
+  return folder;
+}
+
+function buildPaperItem(p) {
+  const div = document.createElement('div');
+  div.className = 'paper-item' + (p.id === currentPaperId ? ' active' : '');
+  div.addEventListener('click', () => loadPdf(p.id, p.filename));
+
+  const done = p.annotated_by && p.annotated_by.length > 0;
+
+  // Name row with delete button
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:flex;align-items:center;position:relative';
+  nameRow.innerHTML = `<div class="pi-name" title="${escHtml(p.filename)}">${escHtml(p.filename)}</div>`;
+  const actions = document.createElement('div');
+  actions.className = 'paper-item-actions';
+  actions.innerHTML = `<button class="paper-act-btn" title="Delete paper">✕</button>`;
+  actions.querySelector('button').addEventListener('click', ev => {
+    ev.stopPropagation();
+    deletePaperConfirm(p.id, p.filename);
+  });
+  nameRow.appendChild(actions);
+  div.appendChild(nameRow);
+
+  // Meta row
+  const meta = document.createElement('div');
+  meta.className = 'pi-meta';
+  meta.textContent = (p.annotated_by || []).join(', ') || 'no annotations';
+  div.appendChild(meta);
+
+  // Chip + move select
+  const bottomRow = document.createElement('div');
+  bottomRow.style.cssText = 'display:flex;align-items:center;gap:5px;flex-wrap:wrap';
+
+  const chip = document.createElement('span');
+  chip.className = 'pi-chip ' + (done ? 'done' : 'none');
+  chip.textContent = done ? 'annotated' : 'pending';
+  bottomRow.appendChild(chip);
+
+  if (allProjects.length > 0) {
+    const sel = document.createElement('select');
+    sel.className = 'move-select';
+    sel.title = 'Move to project';
+    sel.innerHTML = `<option value="">move to…</option>
+      <option value="0">— Unassigned —</option>
+      ${allProjects.map(proj =>
+        `<option value="${proj.id}" ${p.project_id === proj.id ? 'selected' : ''}>${escHtml(proj.name)}</option>`
+      ).join('')}`;
+    sel.addEventListener('change', ev => {
+      ev.stopPropagation();
+      const val = ev.target.value;
+      if (val !== '') assignPaperToProject(p.id, val === '0' ? null : parseInt(val));
+    });
+    sel.addEventListener('click', ev => ev.stopPropagation());
+    bottomRow.appendChild(sel);
+  }
+
+  div.appendChild(bottomRow);
+  return div;
+}
+
+function toggleProject(id) {
+  if (collapsedProjects.has(id)) {
+    collapsedProjects.delete(id);
+  } else {
+    collapsedProjects.add(id);
+  }
+  renderSidebar();
+}
+
+async function createNewProject() {
+  const name = prompt('Project name:');
+  if (!name || !name.trim()) return;
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name: name.trim()}),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await loadPapersAndProjects();
+  } catch(e) {
+    alert('Could not create project: ' + e.message);
+  }
+}
+
+async function renameProjectUI(event, id) {
+  event.stopPropagation();
+  const proj = allProjects.find(p => p.id === id);
+  if (!proj) return;
+  const name = prompt('Rename project:', proj.name);
+  if (!name || !name.trim() || name.trim() === proj.name) return;
+  try {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name: name.trim()}),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await loadPapersAndProjects();
+  } catch(e) {
+    alert('Could not rename project: ' + e.message);
+  }
+}
+
+async function deleteProjectConfirm(event, id) {
+  event.stopPropagation();
+  const proj = allProjects.find(p => p.id === id);
+  if (!proj) return;
+  const papersInProject = allPapers.filter(p => p.project_id === id).length;
+  const msg = papersInProject > 0
+    ? `Delete project "${proj.name}"?\n${papersInProject} paper(s) will become unassigned (not deleted).`
+    : `Delete project "${proj.name}"?`;
+  if (!confirm(msg)) return;
+  try {
+    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await loadPapersAndProjects();
+  } catch(e) {
+    alert('Could not delete project: ' + e.message);
+  }
+}
+
+async function deletePaperConfirm(paperId, filename) {
+  if (!confirm(`Delete "${filename}"?\nThis will also delete all annotations for this paper.`)) return;
+  try {
+    const res = await fetch(`/api/papers/${paperId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (currentPaperId === paperId) {
+      currentPaperId = null;
+      currentFilename = null;
+      pdfDoc = null;
+      spans = [];
+      pipelinePredictions = {};
+      document.getElementById('pdf-scroll').innerHTML =
+        '<div id="no-paper"><p>Upload a PDF from the sidebar to begin annotating</p></div>';
+      document.getElementById('save-status').textContent = 'no paper selected';
+    }
+    await loadPapersAndProjects();
+  } catch(e) {
+    alert('Could not delete paper: ' + e.message);
+  }
+}
+
+async function assignPaperToProject(paperId, projectId) {
+  try {
+    await fetch(`/api/papers/${paperId}/assign`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({project_id: projectId}),
+    });
+    await loadPapersAndProjects();
+  } catch(e) {
+    console.warn('Assign failed:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API — PAPERS
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadPapersAndProjects() {
+  try {
+    const papersRes = await fetch('/api/papers');
+    allPapers = await papersRes.json();
+  } catch(e) { allPapers = []; }
+
+  try {
+    const projRes = await fetch('/api/projects');
+    allProjects = projRes.ok ? await projRes.json() : [];
+  } catch(e) { allProjects = []; }
+
+  renderSidebar();
 }
 
 async function uploadFiles(files) {
@@ -1440,7 +1799,7 @@ async function uploadFiles(files) {
     form.append('file', file);
     await fetch('/api/papers/upload', { method:'POST', body:form });
   }
-  loadPapers();
+  await loadPapersAndProjects();
 }
 
 function handleDrop(e) {
@@ -1480,111 +1839,17 @@ async function saveAnnotation() {
     body: JSON.stringify(payload),
   });
   const result = await res.json();
-  document.getElementById('save-status').textContent = `saved ${result.timestamp?.slice(11,19) || '✓'}`;
-  loadPapers();
+  document.getElementById('save-status').textContent =
+    `saved ${result.timestamp?.slice(11,19) || '✓'}`;
+  loadPapersAndProjects();
 }
 
 async function exportCSV() {
   window.open('/api/export/csv', '_blank');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AI AUTO-FILL
-// ═══════════════════════════════════════════════════════════════════════════
-async function autoFillFields() {
-  if (!currentPaperId) { alert('Select a paper first.'); return; }
-  const studyType = document.getElementById('f-study_type').value;
-  if (!studyType) {
-    alert('Set the Study Type in Stage 1 Classification first, then click Auto-fill.');
-    document.getElementById('f-major_category').focus();
-    return;
-  }
-
-  // Collect all field definitions: universal + type-specific + modifiers
-  const allFields = [
-    ...UNIVERSAL_FIELDS.map(f => ({ id: f.id, label: f.label })),
-    ...(TYPE_FIELDS[studyType] || []).map(f => ({ id: f.id, label: f.label })),
-    ...MODIFIER_FIELDS
-      .filter(f => f.type !== 'select')          // skip enum fields — keep text only
-      .map(f => ({ id: f.id, label: f.label })),
-  ];
-
-  const btn    = document.getElementById('autofill-btn');
-  const status = document.getElementById('autofill-status');
-  const banner = document.getElementById('ai-banner');
-  btn.disabled = true;
-  btn.textContent = '⏳ Extracting…';
-  status.style.display = 'block';
-  status.style.color = 'var(--muted)';
-  status.textContent = `Calling Claude (${studyType}) — may take 15–40 s for longer PDFs…`;
-  banner.style.display = 'none';
-
-  // Clear previous ai-prefilled markers
-  document.querySelectorAll('.ai-prefilled').forEach(el => el.classList.remove('ai-prefilled'));
-
-  try {
-    const res = await fetch(`/api/papers/${currentPaperId}/prefill`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ study_type: studyType, fields: allFields }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-      throw new Error(err.detail || `HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    // Populate fields, skipping classification fields and already-filled fields
-    const SKIP = new Set([
-      'major_category','subcategory','study_type',
-      'rule1_pass','rule2_pass','rule2b_pass','rule3_pass',
-      'reviewer_action','author_label_discordance','natural_experiment_flag',
-    ]);
-    let filled = 0;
-    Object.entries(data).forEach(([k, v]) => {
-      if (SKIP.has(k) || !v || typeof v !== 'string') return;
-      const el = document.getElementById('f-' + k);
-      if (!el) return;
-      el.value = v;
-      if (el.tagName !== 'SELECT') el.classList.add('ai-prefilled');
-      filled++;
-    });
-
-    // Store as baseline for corrections tracking
-    pipelinePredictions = {};
-    Object.entries(data).forEach(([k, v]) => {
-      if (v && typeof v === 'string') pipelinePredictions[k] = v;
-    });
-
-    // Remove amber marker when user edits; update correction highlights if in Correct mode
-    document.querySelectorAll('.ai-prefilled').forEach(el => {
-      el.addEventListener('input', () => {
-        el.classList.remove('ai-prefilled');
-        if (reviewerAction === 'Correct' || reviewerAction === 'Flag') {
-          highlightCorrections();
-          updateCorrectionSummary();
-        }
-      }, { once: true });
-    });
-
-    status.style.color = '#16a34a';
-    status.textContent = `✓ ${filled} fields extracted. Review each amber-highlighted value before saving.`;
-    btn.textContent = '🔄 Re-fill';
-    btn.disabled = false;
-    banner.style.display = 'block';
-
-  } catch (err) {
-    status.style.color = 'var(--red)';
-    status.textContent = '✗ ' + err.message;
-    btn.textContent = '🤖 Auto-fill from PDF';
-    btn.disabled = false;
-  }
-}
-
-// ── Init ────────────────────────────────────────────────────────────────
-loadPapers();
+// ── Init ──────────────────────────────────────────────────────────────────
+loadPapersAndProjects();
 </script>
 </body>
 </html>
