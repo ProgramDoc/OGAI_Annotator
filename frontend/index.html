@@ -3,1344 +3,533 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OGAI · Annotation Platform</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<title>OGAI · Study Design Taxonomy</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --navy: #161b2e; --blue: #274472; --sky: #5e9ad0;
-  --green: #16a34a; --amber: #d97706; --red: #dc2626;
-  --purple: #7c3aed; --bg: #f4f5f9; --card: #ffffff;
-  --border: #dce4ee; --text: #1e293b; --muted: #64748b;
-  --panel-w: 440px;
+  --root: #161b2e;
+  --major: #1e2a45;
+  --sub: #274472;
+  --grp: #3670a8;
+  --st: #5e9ad0;
+  --line: #a4b8ce;
+  --bg: #f4f5f9;
+  --gold: #e8b931;
+  --doc: #4caf84;
+  --sidebar-w: 300px;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
 
-/* ── TOP BAR ── */
-#topbar {
-  height: 46px; background: var(--navy); display: flex; align-items: center;
-  padding: 0 16px; gap: 14px; flex-shrink: 0; z-index: 100;
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+/* ── LOGIN GATE ── */
+#login-gate {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--root);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+}
+#login-gate.hidden { display: none; }
+
+.login-box {
+  background: #1e2a45;
+  border-radius: 12px;
+  padding: 40px 36px;
+  width: 360px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  text-align: center;
+}
+.login-box .logo {
+  font-size: 28px; font-weight: 700; color: #fff;
+  letter-spacing: -0.5px; margin-bottom: 4px;
+}
+.login-box .logo span { color: var(--st); }
+.login-box .tagline {
+  font-size: 12px; color: #7a8599; margin-bottom: 24px;
+}
+.login-box input {
+  width: 100%; padding: 10px 14px; border: 1px solid #3a4a6a;
+  border-radius: 8px; background: #161b2e; color: #e2e8f0;
+  font-size: 14px; font-family: inherit; outline: none;
+  margin-bottom: 12px;
+}
+.login-box input:focus { border-color: var(--st); }
+.login-box button {
+  width: 100%; padding: 10px; border: none; border-radius: 8px;
+  background: var(--st); color: #fff; font-size: 14px;
+  font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.login-box button:hover { background: #4a8ac0; }
+.login-error { color: #e85d5d; font-size: 12px; margin-top: 8px; min-height: 18px; }
+
+/* ── APP LAYOUT ── */
+#app {
+  display: none; height: 100vh;
+  flex-direction: column;
+}
+#app.visible { display: flex; }
+
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: var(--root);
   border-bottom: 1px solid rgba(255,255,255,.08);
-}
-#topbar .brand { font-weight: 700; font-size: 15px; color: #fff; letter-spacing: -.2px; }
-#topbar .brand span { color: var(--sky); }
-#topbar input[type=text] {
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
-  border-radius: 5px; color: #fff; padding: 5px 10px; font-size: 12px;
-  font-family: inherit; outline: none; width: 160px;
-}
-#topbar input[type=text]::placeholder { color: rgba(255,255,255,.4); }
-#topbar input[type=text]:focus { border-color: var(--sky); }
-.tb-btn {
-  padding: 5px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 5px;
-  background: transparent; color: #c8d8e8; font-size: 11px; font-weight: 600;
-  cursor: pointer; font-family: inherit; white-space: nowrap;
-}
-.tb-btn:hover { background: rgba(255,255,255,.08); }
-.tb-btn.primary { background: var(--sky); color: #fff; border-color: var(--sky); }
-.tb-btn.primary:hover { background: #4a8ac0; }
-.tb-btn.success { background: var(--green); color: #fff; border-color: var(--green); }
-.tb-sep { width: 1px; height: 20px; background: rgba(255,255,255,.12); }
-#save-status { font-size: 11px; color: rgba(255,255,255,.4); margin-left: 4px; font-family: 'IBM Plex Mono', monospace; }
-
-/* ── MAIN LAYOUT ── */
-#layout {
-  display: flex; height: calc(100vh - 46px); overflow: hidden;
-}
-
-/* ── LEFT: PAPER LIST ── */
-#sidebar {
-  width: 220px; flex-shrink: 0; background: var(--navy);
-  border-right: 1px solid rgba(255,255,255,.06);
-  display: flex; flex-direction: column; overflow: hidden;
-}
-#sidebar-header {
-  padding: 12px 14px 8px; font-size: 10px; font-weight: 700;
-  color: rgba(255,255,255,.4); letter-spacing: .1em; text-transform: uppercase;
   flex-shrink: 0;
 }
-#paper-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
-.paper-item {
-  padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 2px;
-  transition: background .12s;
+.top-bar .title { font-size: 16px; font-weight: 700; color: #fff; }
+.top-bar .title span { color: var(--st); }
+.top-bar .actions { display: flex; gap: 8px; }
+.top-bar button {
+  padding: 6px 14px; border: 1px solid #3a4a6a; border-radius: 6px;
+  background: transparent; color: #c0c8d8; font-size: 12px;
+  font-weight: 600; cursor: pointer; font-family: inherit;
 }
-.paper-item:hover { background: rgba(255,255,255,.06); }
-.paper-item.active { background: rgba(94,154,208,.2); }
-.paper-item .pi-name {
-  font-size: 11.5px; color: #e2e8f0; font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.paper-item .pi-meta {
-  font-size: 10px; color: rgba(255,255,255,.3); margin-top: 2px;
-  font-family: 'IBM Plex Mono', monospace;
-}
-.pi-chip {
-  display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 8px;
-  font-weight: 600; margin-top: 3px;
-}
-.pi-chip.done  { background: rgba(22,163,74,.2);  color: #4ade80; }
-.pi-chip.prog  { background: rgba(217,119,6,.2);  color: #fbbf24; }
-.pi-chip.none  { background: rgba(255,255,255,.06); color: rgba(255,255,255,.3); }
+.top-bar button:hover { background: rgba(255,255,255,.06); }
+.top-bar button.active { background: var(--st); color: #fff; border-color: var(--st); }
 
-#upload-zone {
-  margin: 8px; padding: 14px; border: 1.5px dashed rgba(255,255,255,.15);
-  border-radius: 6px; text-align: center; cursor: pointer; transition: border-color .15s;
+.main-area {
+  display: flex; flex: 1; overflow: hidden; position: relative;
 }
-#upload-zone:hover { border-color: var(--sky); }
-#upload-zone p { font-size: 11px; color: rgba(255,255,255,.4); line-height: 1.5; }
-#upload-zone p strong { color: rgba(255,255,255,.7); }
-#file-input { display: none; }
 
-/* ── CENTRE: PDF VIEWER ── */
-#pdf-panel {
+/* ── PDF SIDEBAR ── */
+.pdf-sidebar {
+  width: 0; overflow-y: auto; overflow-x: hidden;
+  background: #1a2038; border-right: 1px solid rgba(255,255,255,.06);
+  transition: width .25s ease; flex-shrink: 0;
+}
+.pdf-sidebar.open { width: var(--sidebar-w); }
+.pdf-sidebar-inner { width: var(--sidebar-w); padding: 16px; }
+.pdf-sidebar h3 {
+  font-size: 12px; font-weight: 700; color: #8891a4;
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.pdf-card {
+  display: flex; gap: 10px; padding: 10px; border-radius: 8px;
+  background: rgba(255,255,255,.04); margin-bottom: 8px;
+  text-decoration: none; cursor: pointer;
+  transition: background .15s;
+}
+.pdf-card:hover { background: rgba(255,255,255,.08); }
+.pdf-icon { font-size: 22px; flex-shrink: 0; padding-top: 2px; }
+.pdf-name { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.pdf-desc { font-size: 10px; color: #8891a4; margin-top: 2px; line-height: 1.4; }
+.pdf-tag {
+  display: inline-block; margin-top: 4px; font-size: 9px;
+  font-weight: 700; color: var(--st); background: rgba(94,154,208,.12);
+  padding: 2px 6px; border-radius: 3px; letter-spacing: .3px;
+}
+
+/* ── DIAGRAM AREA ── */
+.diagram-area {
   flex: 1; display: flex; flex-direction: column; overflow: hidden;
-  background: #2a2a2a; min-width: 0;
-}
-#pdf-toolbar {
-  height: 38px; background: #1a1a1a; display: flex; align-items: center;
-  padding: 0 12px; gap: 10px; flex-shrink: 0;
-  border-bottom: 1px solid #333;
-}
-#pdf-toolbar button {
-  background: #333; border: none; color: #ccc; padding: 4px 10px;
-  border-radius: 4px; cursor: pointer; font-size: 12px;
-}
-#pdf-toolbar button:hover { background: #444; }
-#page-info { font-size: 11px; color: #999; font-family: 'IBM Plex Mono', monospace; }
-#pdf-toolbar input[type=number] {
-  width: 44px; background: #333; border: 1px solid #555; color: #fff;
-  padding: 3px 6px; border-radius: 4px; font-size: 12px; text-align: center;
-}
-#zoom-display { font-size: 11px; color: #777; font-family: 'IBM Plex Mono', monospace; min-width: 42px; }
-.tb-spacer { flex: 1; }
-
-/* ── PDF CANVAS AREA ── */
-#pdf-scroll { flex: 1; overflow-y: auto; overflow-x: auto; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.page-wrapper {
-  position: relative; flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,.5);
-}
-.page-wrapper canvas { display: block; }
-
-/* Text layer — for selection */
-.textLayer {
-  position: absolute; inset: 0; overflow: hidden;
-  opacity: 1; line-height: 1; pointer-events: all;
-}
-.textLayer span {
-  color: transparent; position: absolute; white-space: pre;
-  cursor: text; transform-origin: 0% 0%;
-}
-.textLayer .highlight { background: rgba(255, 214, 0, 0.3); border-radius: 2px; }
-.textLayer ::selection { background: rgba(94,154,208,0.35); }
-
-/* Span highlight overlay */
-.span-overlay {
-  position: absolute; pointer-events: none; z-index: 5;
-}
-.span-box {
-  position: absolute; border-radius: 2px; pointer-events: all;
-  cursor: pointer; transition: opacity .1s;
-}
-.span-box:hover { opacity: .7; }
-
-/* Active field pulse */
-#active-field-banner {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: var(--purple); color: #fff; padding: 8px 18px; border-radius: 20px;
-  font-size: 12px; font-weight: 600; z-index: 1000; display: none;
-  box-shadow: 0 4px 20px rgba(124,58,237,.5);
-  pointer-events: none;
 }
 
-/* Floating link button */
-#link-btn {
-  position: fixed; z-index: 1000; display: none;
-  background: var(--purple); color: #fff; border: none;
-  padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600;
-  cursor: pointer; box-shadow: 0 3px 12px rgba(124,58,237,.5); font-family: inherit;
-  white-space: nowrap;
+.legend-bar {
+  display: flex; gap: 14px; padding: 8px 20px;
+  background: #fff; border-bottom: 1px solid rgba(0,0,0,.06);
+  flex-wrap: wrap; align-items: center; flex-shrink: 0;
 }
-#link-btn:hover { background: #6d28d9; }
-
-/* ── RIGHT: FORM PANEL ── */
-#form-panel {
-  width: var(--panel-w); flex-shrink: 0; display: flex; flex-direction: column;
-  background: var(--card); border-left: 1px solid var(--border); overflow: hidden;
+.legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; color: #6b7589;
 }
-#form-scroll { flex: 1; overflow-y: auto; padding: 16px; }
-
-.form-section {
-  margin-bottom: 20px;
-}
-.form-section-header {
-  font-size: 10px; font-weight: 700; color: var(--blue); letter-spacing: .1em;
-  text-transform: uppercase; padding: 6px 10px; background: #eef3fa;
-  border-radius: 4px; margin-bottom: 10px; border-left: 3px solid var(--sky);
+.lsw { width: 14px; height: 8px; border-radius: 2px; }
+.lsw.new-swatch { border: 1.5px solid var(--gold); }
+.lsw.doc-swatch { background: var(--st); position: relative; }
+.lsw.doc-swatch::after {
+  content: ''; position: absolute; right: -2px; bottom: -2px;
+  width: 6px; height: 6px; background: var(--doc); border-radius: 50%;
 }
 
-.field-row {
-  margin-bottom: 10px; position: relative;
-}
-.field-label {
-  font-size: 10.5px; font-weight: 600; color: var(--blue);
-  margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
-  cursor: pointer; user-select: none;
-}
-.field-label:hover .field-anchor-btn { opacity: 1; }
-.field-anchor-btn {
-  opacity: 0; background: var(--purple); color: #fff; border: none;
-  border-radius: 8px; padding: 1px 7px; font-size: 9px; font-weight: 700;
-  cursor: pointer; font-family: inherit; transition: opacity .15s;
-}
-.field-anchor-btn.active { opacity: 1; background: var(--purple); }
-.field-anchor-btn.linked { opacity: 1; background: var(--green); }
-
-.field-row input[type=text],
-.field-row textarea,
-.field-row select {
-  width: 100%; padding: 6px 9px; border: 1px solid var(--border);
-  border-radius: 5px; font-family: inherit; font-size: 12px;
-  background: var(--bg); color: var(--text); outline: none;
-  transition: border-color .15s;
-}
-.field-row input[type=text]:focus,
-.field-row textarea:focus,
-.field-row select:focus { border-color: var(--sky); background: #fff; }
-.field-row textarea { resize: vertical; min-height: 56px; }
-.field-row.active-field > input,
-.field-row.active-field > textarea,
-.field-row.active-field > select {
-  border-color: var(--purple); box-shadow: 0 0 0 2px rgba(124,58,237,.12);
+#tree-container {
+  flex: 1; overflow: auto; position: relative; padding: 24px 32px 48px;
 }
 
-/* Span tag below a linked field */
-.span-tag {
-  margin-top: 4px; padding: 4px 8px; background: #f0ebff;
-  border: 1px solid #c4b5fd; border-radius: 4px;
-  font-size: 10px; color: #5b21b6; line-height: 1.4;
-  display: flex; align-items: flex-start; gap: 6px;
-}
-.span-tag .st-text { flex: 1; font-style: italic; }
-.span-tag .st-loc { color: #7c3aed; font-family: 'IBM Plex Mono', monospace; font-size: 9px; white-space: nowrap; }
-.span-tag .st-del { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 12px; padding: 0 2px; flex-shrink: 0; }
-.span-tag .st-del:hover { color: var(--red); }
-
-/* Conditional section visibility */
-.type-section { display: none; }
-.type-section.visible { display: block; }
-
-/* Radio group */
-.radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
-.radio-group label {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 11.5px; cursor: pointer; padding: 4px 8px;
-  border: 1px solid var(--border); border-radius: 4px; background: var(--bg);
-  transition: all .12s;
-}
-.radio-group label:hover { border-color: var(--sky); }
-.radio-group input[type=radio] { margin: 0; accent-color: var(--sky); }
-.radio-group input[type=radio]:checked + span { color: var(--navy); font-weight: 600; }
-
-/* Rule badges */
-.rule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.rule-item select {
-  width: 100%; padding: 5px 8px; border: 1px solid var(--border);
-  border-radius: 4px; font-family: inherit; font-size: 11px; background: var(--bg);
-}
-.rule-item label { font-size: 10px; font-weight: 700; color: var(--muted); display: block; margin-bottom: 3px; }
-
-/* Bottom bar */
-#form-bottom {
-  padding: 12px 16px; border-top: 1px solid var(--border);
-  display: flex; gap: 8px; flex-shrink: 0;
-}
-#form-bottom button {
-  flex: 1; padding: 9px; border: none; border-radius: 6px;
-  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-}
-#btn-confirm { background: #dcfce7; color: #166534; }
-#btn-confirm:hover { background: #bbf7d0; }
-#btn-correct { background: #fef3c7; color: #92400e; }
-#btn-correct:hover { background: #fde68a; }
-#btn-flag    { background: #fce7f3; color: #9d174d; }
-#btn-flag:hover { background: #fbcfe8; }
-
-/* Placeholder */
-#no-paper {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 12px; color: #444;
-}
-#no-paper p { font-size: 13px; }
-
-/* Tooltip */
-.tooltip { position: relative; }
-.tooltip:hover::after {
-  content: attr(data-tip);
-  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  background: #1e293b; color: #fff; font-size: 10px; padding: 4px 8px;
-  border-radius: 4px; white-space: nowrap; pointer-events: none; z-index: 999;
+canvas {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 0;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+#tree {
+  position: relative; z-index: 1;
+  display: inline-flex; flex-direction: column;
+}
+
+/* ── TREE NODES ── */
+.row { display: flex; align-items: center; }
+.children { display: flex; flex-direction: column; gap: 3px; margin-left: 20px; }
+
+.nd {
+  position: relative;
+  display: inline-block; padding: 5px 10px;
+  border-radius: 5px; font-weight: 600;
+  white-space: nowrap; cursor: default;
+  font-size: 10.5px; line-height: 1.35;
+  margin: 1.5px 0;
+  transition: transform .12s, box-shadow .12s;
+}
+.nd:hover { transform: translateY(-1px); box-shadow: 0 3px 12px rgba(0,0,0,.15); }
+
+.nd.root { background: var(--root); color: #e2e8f0; font-size: 13px; padding: 8px 16px; }
+.nd.major { background: var(--major); color: #e2e8f0; font-size: 11.5px; padding: 6px 12px; }
+.nd.sub { background: var(--sub); color: #d0daea; font-size: 11px; }
+.nd.grp { background: var(--grp); color: #e8f0f8; }
+.nd.st { background: var(--st); color: #fff; }
+.nd.is-new { box-shadow: 0 0 0 2px var(--gold); }
+.nd.has-doc::after {
+  content: ''; position: absolute; right: -3px; top: -3px;
+  width: 7px; height: 7px; background: var(--doc); border-radius: 50%;
+  border: 1px solid var(--bg);
+}
+
+/* ── TOOLTIPS ── */
+.tt {
+  display: none; position: absolute; bottom: calc(100% + 8px);
+  left: 50%; transform: translateX(-50%);
+  background: #1a1a2e; color: #e2e8f0; padding: 8px 11px;
+  border-radius: 6px; font-size: 10.5px; font-weight: 400;
+  white-space: normal; width: max-content; max-width: 280px;
+  line-height: 1.45; z-index: 999;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25); pointer-events: none;
+}
+.nd:hover .tt { display: block; }
+.tt::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #1a1a2e;
+}
+.tt .rob { display: block; margin-top: 4px; color: #7eb8e8; font-weight: 600; font-size: 10px; }
+.tt .rob.has-pdf { color: var(--doc); }
+.tt .pdf-note { display: block; font-size: 9px; color: var(--doc); margin-top: 2px; }
+.tt .new-badge {
+  display: inline-block; background: var(--gold); color: #1a1a2e;
+  font-size: 8px; font-weight: 700; padding: 1px 4px;
+  border-radius: 2px; margin-left: 4px; vertical-align: middle;
+  letter-spacing: .3px;
+}
 </style>
 </head>
 <body>
 
-<!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
-<div id="topbar">
-  <div class="brand"><span>OGAI</span> Annotation Platform</div>
-  <div class="tb-sep"></div>
-  <input type="text" id="reviewer-input" placeholder="Reviewer ID (e.g. tom)" autocomplete="off">
-  <div class="tb-sep"></div>
-  <button class="tb-btn" onclick="exportCSV()">⬇ Export CSV</button>
-  <button class="tb-btn primary" onclick="saveAnnotation()" id="save-btn">💾 Save</button>
-  <span id="save-status">no paper selected</span>
-</div>
-
-<div id="layout">
-
-<!-- ── SIDEBAR: PAPER LIST ─────────────────────────────────────────────── -->
-<div id="sidebar">
-  <div id="sidebar-header">Papers</div>
-  <div id="upload-zone" onclick="document.getElementById('file-input').click()"
-       ondragover="event.preventDefault()" ondrop="handleDrop(event)">
-    <p><strong>Upload PDF</strong><br>click or drag &amp; drop</p>
-  </div>
-  <input type="file" id="file-input" accept=".pdf" multiple onchange="uploadFiles(this.files)">
-  <div id="paper-list"></div>
-</div>
-
-<!-- ── PDF VIEWER ──────────────────────────────────────────────────────── -->
-<div id="pdf-panel">
-  <div id="pdf-toolbar">
-    <button onclick="changePage(-1)">◀</button>
-    <input type="number" id="page-input" value="1" min="1" onchange="gotoPage(this.value)">
-    <span id="page-info">/ 1</span>
-    <button onclick="changePage(1)">▶</button>
-    <div class="tb-spacer"></div>
-    <button onclick="changeZoom(-0.2)">−</button>
-    <span id="zoom-display">100%</span>
-    <button onclick="changeZoom(0.2)">+</button>
-  </div>
-  <div id="pdf-scroll">
-    <div id="no-paper">
-      <p>Upload a PDF from the sidebar to begin annotating</p>
-    </div>
+<!-- ═══ LOGIN GATE ═══ -->
+<div id="login-gate">
+  <div class="login-box">
+    <div class="logo"><span>OGAI</span> Pipeline</div>
+    <div class="tagline">Study Design &amp; Research Evidence Taxonomy</div>
+    <input type="password" id="pw" placeholder="Enter password" autocomplete="off">
+    <button id="login-btn">Access Taxonomy</button>
+    <div class="login-error" id="login-error"></div>
   </div>
 </div>
 
-<!-- Floating elements -->
-<div id="active-field-banner">📎 Click a field to link selected text</div>
-<button id="link-btn" onclick="linkSelection()">📎 Link to: <span id="link-btn-field"></span></button>
-
-<!-- ── FORM PANEL ───────────────────────────────────────────────────────── -->
-<div id="form-panel">
-  <div id="form-scroll">
-
-    <!-- Stage 1: Classification -->
-    <div class="form-section">
-      <div class="form-section-header">Stage 1 · Classification</div>
-
-      <div class="field-row" id="fr-major_category">
-        <div class="field-label">
-          Major Category
-          <button class="field-anchor-btn" onclick="setActiveField('major_category',this)" data-field="major_category">anchor</button>
-        </div>
-        <select id="f-major_category" onchange="onMajorCatChange()">
-          <option value="">— select —</option>
-          <option>Primary Studies</option>
-          <option>Evidence Synthesis</option>
-          <option>Guidance / Consensus</option>
-          <option>Economic &amp; Decision Models</option>
-        </select>
-      </div>
-
-      <div class="field-row" id="fr-subcategory">
-        <div class="field-label">Subcategory
-          <button class="field-anchor-btn" onclick="setActiveField('subcategory',this)" data-field="subcategory">anchor</button>
-        </div>
-        <select id="f-subcategory" onchange="onSubcatChange()"><option value="">— select major first —</option></select>
-      </div>
-
-      <div class="field-row" id="fr-study_type">
-        <div class="field-label">Study Type
-          <button class="field-anchor-btn" onclick="setActiveField('study_type',this)" data-field="study_type">anchor</button>
-        </div>
-        <select id="f-study_type" onchange="onStudyTypeChange()"><option value="">— select subcategory first —</option></select>
-      </div>
-
-      <div class="field-row">
-        <div class="field-label">Primacy Gate Adjudication</div>
-        <div class="rule-grid">
-          <div class="rule-item"><label>Rule 1 — Diagnostic</label>
-            <select id="f-rule1_pass"><option>Fail</option><option>Pass</option><option>N/A</option></select></div>
-          <div class="rule-item"><label>Rule 2 — Prediction</label>
-            <select id="f-rule2_pass"><option>Fail</option><option>Pass</option><option>N/A</option></select></div>
-          <div class="rule-item"><label>Rule 2b — Prognostic</label>
-            <select id="f-rule2b_pass"><option>Fail</option><option>Pass</option><option>N/A</option></select></div>
-          <div class="rule-item"><label>Rule 3 — Quasi-exp</label>
-            <select id="f-rule3_pass"><option>Fail</option><option>Pass</option><option>N/A</option></select></div>
-        </div>
-      </div>
-
-      <div class="field-row" id="fr-natural_experiment_flag">
-        <div class="field-label">Natural Experiment Flag</div>
-        <select id="f-natural_experiment_flag">
-          <option value="No">No</option>
-          <option value="Yes — lottery/admin random draw">Yes — lottery/admin random draw</option>
-          <option value="Yes — policy-driven exogenous variation">Yes — policy-driven exogenous variation</option>
-        </select>
-      </div>
-
-      <div class="field-row" id="fr-author_stated_design">
-        <div class="field-label">Author-Stated Design Label
-          <button class="field-anchor-btn" onclick="setActiveField('author_stated_design',this)" data-field="author_stated_design">anchor</button>
-        </div>
-        <input type="text" id="f-author_stated_design" placeholder="verbatim label from paper">
-      </div>
-
-      <div class="field-row" id="fr-author_label_discordance">
-        <div class="field-label">Author-Label Concordance</div>
-        <select id="f-author_label_discordance">
-          <option>Concordant — author label matches methodology</option>
-          <option>Discordant — author label wrong (methodology overrides)</option>
-          <option>Discordant — ambiguous / borderline</option>
-          <option>N/A — author provides no explicit label</option>
-        </select>
-      </div>
+<!-- ═══ APP ═══ -->
+<div id="app">
+  <div class="top-bar">
+    <div class="title"><span>OGAI</span>&nbsp; Study Design Taxonomy <span style="font-size:11px;color:#7a8599;font-weight:400">&nbsp;· 36 Study Types</span></div>
+    <div class="actions">
+      <a href="rubric.html" style="padding:6px 14px;border:1px solid #3a4a6a;border-radius:6px;background:transparent;color:#c0c8d8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;">Classification Rubric</a>
+      <button id="rob-toggle">RoB Tools</button>
+      <button id="logout-btn">Logout</button>
     </div>
-
-    <!-- Layer 1: Universal -->
-    <div class="form-section">
-      <div class="form-section-header">Layer 1 · Universal Fields</div>
-      <div id="universal-fields"></div>
-    </div>
-
-    <!-- Layer 2: Type-specific (conditional) -->
-    <div class="form-section" id="type-specific-section" style="display:none">
-      <div class="form-section-header" id="type-specific-header">Layer 2 · Type-Specific Fields</div>
-      <div id="type-specific-fields"></div>
-    </div>
-
-    <!-- Layer 3: Design modifier tags -->
-    <div class="form-section">
-      <div class="form-section-header">Layer 3 · Design Modifier Tags</div>
-      <div id="modifier-fields"></div>
-    </div>
-
-    <!-- Annotation notes -->
-    <div class="form-section">
-      <div class="form-section-header">Annotation Notes</div>
-      <div class="field-row">
-        <div class="field-label">Correction / Flag Notes</div>
-        <textarea id="f-correction_notes" placeholder="Explain why the pipeline classification is wrong, or what makes this case ambiguous..."></textarea>
-      </div>
-    </div>
-
-  </div><!-- /form-scroll -->
-
-  <div id="form-bottom">
-    <button id="btn-confirm" onclick="setAction('Confirm')">✓ Confirm</button>
-    <button id="btn-correct" onclick="setAction('Correct')">✎ Correct</button>
-    <button id="btn-flag"    onclick="setAction('Flag')">⚑ Flag</button>
   </div>
-</div><!-- /form-panel -->
+  <div class="main-area">
 
-</div><!-- /layout -->
+    <!-- PDF Sidebar -->
+    <div class="pdf-sidebar" id="pdf-sidebar">
+      <div class="pdf-sidebar-inner">
+        <h3>Risk of Bias Tools</h3>
+
+        <a class="pdf-card" href="20190814_RoB_2_0_cribsheet_parallel_trial_.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">RoB 2</div>
+            <div class="pdf-desc">Revised Cochrane tool for randomized trials. 5 domains, signaling questions.</div>
+            <span class="pdf-tag">RCT · CLUSTER RCT · CROSSOVER · STEPPED-WEDGE</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="ROBINSI_cribsheet_20November2025.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">ROBINS-I V2</div>
+            <div class="pdf-desc">Risk of bias in non-randomized studies of interventions. 7 domains, November 2025 update.</div>
+            <span class="pdf-tag">NON-RANDOMIZED TRIAL · DiD · RDD · NATURAL EXPERIMENT</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="suggested_risk_of_bias_criteria_for_epoc_reviews.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">EPOC</div>
+            <div class="pdf-desc">Cochrane EPOC criteria for ITS, controlled before-after, and uncontrolled before-after studies.</div>
+            <span class="pdf-tag">ITS · CONTROLLED BEFORE-AFTER · UNCONTROLLED BEFORE-AFTER</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="Quadras2.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">QUADAS-2</div>
+            <div class="pdf-desc">Quality assessment of diagnostic accuracy studies. 4 domains + applicability.</div>
+            <span class="pdf-tag">DIAGNOSTIC ACCURACY</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="QUIPS_tool.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">QUIPS</div>
+            <div class="pdf-desc">Quality in Prognosis Studies. 6 domains for prognostic factor studies.</div>
+            <span class="pdf-tag">PROGNOSTIC FACTOR STUDIES</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="PROBAST.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">PROBAST</div>
+            <div class="pdf-desc">Prediction model risk of bias assessment. 4 domains, version May 2019.</div>
+            <span class="pdf-tag">PREDICTION MODEL</span>
+          </div>
+        </a>
+
+        <a class="pdf-card" href="AMSTAR2.pdf" target="_blank">
+          <div class="pdf-icon">📄</div>
+          <div class="pdf-info">
+            <div class="pdf-name">AMSTAR 2</div>
+            <div class="pdf-desc">Critical appraisal tool for systematic reviews (RCTs and/or NRSIs). 16 items, 7 critical.</div>
+            <span class="pdf-tag">SYSTEMATIC REVIEW · UMBRELLA REVIEW</span>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Diagram -->
+    <div class="diagram-area">
+      <div class="legend-bar">
+        <div class="legend-item"><div class="lsw" style="background:var(--root)"></div>Root</div>
+        <div class="legend-item"><div class="lsw" style="background:var(--major)"></div>Major Category</div>
+        <div class="legend-item"><div class="lsw" style="background:var(--sub)"></div>Subcategory</div>
+        <div class="legend-item"><div class="lsw" style="background:var(--grp)"></div>Group</div>
+        <div class="legend-item"><div class="lsw" style="background:var(--st)"></div>Study Type</div>
+        <div class="legend-item"><div class="lsw new-swatch" style="background:var(--st)"></div>New (v3)</div>
+        <div class="legend-item"><div class="lsw doc-swatch"></div>RoB PDF in project</div>
+      </div>
+      <div id="tree-container">
+        <canvas id="cv"></canvas>
+        <div id="tree"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════════
-// TAXONOMY & FIELD SCHEMA
-// ═══════════════════════════════════════════════════════════════════════════
+/* ── PASSWORD AUTH ── */
+const SESSION_KEY = 'ogai_auth';
 
-const SUBCATS = {
-  "Primary Studies": ["Randomized Controlled","Non-Randomized Controlled","Non-Randomized Uncontrolled","Quasi-Experimental","Descriptive Observational","Analytical Observational","Diagnostic / Prognostic","Qualitative & Mixed Methods"],
-  "Evidence Synthesis": ["Systematic Review / Meta-Analysis"],
-  "Guidance / Consensus": ["Guideline / Consensus"],
-  "Economic & Decision Models": ["Economic Evaluation"],
-};
-
-const STUDY_TYPES = {
-  "Randomized Controlled":        ["Randomized Controlled Trial","Cluster Randomized Trial","Stepped-Wedge Cluster RCT","Crossover Trial"],
-  "Non-Randomized Controlled":    ["Non-Randomized Trial"],
-  "Non-Randomized Uncontrolled":  ["Single-Arm Trial","Dose-Escalation Study"],
-  "Quasi-Experimental":           ["Interrupted Time Series","Uncontrolled Before-After","Difference-in-Differences","Regression Discontinuity"],
-  "Descriptive Observational":    ["Case Report / Series","Cross-Sectional (Descriptive)","Ecological Study"],
-  "Analytical Observational":     ["Case-Control","Cohort Study","Cross-Sectional (Analytical)","Self-Controlled Case Series","Case-Crossover","Mendelian Randomization"],
-  "Diagnostic / Prognostic":      ["Diagnostic Accuracy","Prognostic Factor Study","Prediction Model Study"],
-  "Qualitative & Mixed Methods":  ["Qualitative Research","Mixed Methods"],
-  "Systematic Review / Meta-Analysis": ["SR without Meta-Analysis","SR with Meta-Analysis","Umbrella Review","Network Meta-Analysis","Scoping Review","Narrative Review"],
-  "Guideline / Consensus":        ["Guideline / Consensus"],
-  "Economic Evaluation":          ["Economic Evaluation"],
-};
-
-const ROB_MAP = {
-  "Randomized Controlled Trial": "RoB 2",
-  "Cluster Randomized Trial": "RoB 2 (cluster)",
-  "Stepped-Wedge Cluster RCT": "RoB 2 (SW-CRT)",
-  "Crossover Trial": "RoB 2 (crossover)",
-  "Non-Randomized Trial": "ROBINS-I V2",
-  "Single-Arm Trial": "ROBINS-I V2 (adapted)",
-  "Dose-Escalation Study": "ROBINS-I V2 (adapted)",
-  "Interrupted Time Series": "EPOC",
-  "Uncontrolled Before-After": "EPOC",
-  "Difference-in-Differences": "ROBINS-I",
-  "Regression Discontinuity": "ROBINS-I",
-  "Case Report / Series": "CARE Checklist",
-  "Cross-Sectional (Descriptive)": "AXIS",
-  "Ecological Study": "No standard tool",
-  "Case-Control": "ROBINS-E",
-  "Cohort Study": "ROBINS-E",
-  "Cross-Sectional (Analytical)": "AXIS",
-  "Self-Controlled Case Series": "SCCS Checklist",
-  "Case-Crossover": "NOS",
-  "Mendelian Randomization": "STROBE-MR",
-  "Diagnostic Accuracy": "QUADAS-2",
-  "Prognostic Factor Study": "QUIPS",
-  "Prediction Model Study": "PROBAST",
-  "Qualitative Research": "CASP / COREQ",
-  "Mixed Methods": "MMAT",
-  "SR without Meta-Analysis": "AMSTAR 2",
-  "SR with Meta-Analysis": "AMSTAR 2 + ROB-ME",
-  "Umbrella Review": "AMSTAR 2",
-  "Network Meta-Analysis": "CINeMA",
-  "Scoping Review": "No standard tool (PRISMA-ScR)",
-  "Narrative Review": "No standard tool",
-  "Guideline / Consensus": "AGREE II",
-  "Economic Evaluation": "CHEERS",
-};
-
-// Layer 1 universal fields — all studies
-const UNIVERSAL_FIELDS = [
-  { id:"citation_authors",      label:"Authors",                type:"text" },
-  { id:"citation_year",         label:"Year",                   type:"text" },
-  { id:"citation_title",        label:"Title",                  type:"text" },
-  { id:"citation_journal",      label:"Journal",                type:"text" },
-  { id:"citation_doi",          label:"DOI",                    type:"text" },
-  { id:"study_objective",       label:"Study Objective",        type:"textarea" },
-  { id:"population_participants",         label:"Participants (P)",         type:"textarea" },
-  { id:"population_intervention_exposure",label:"Intervention / Exposure (I/E)", type:"textarea" },
-  { id:"population_comparator",           label:"Comparator (C)",           type:"text" },
-  { id:"population_outcomes",             label:"Outcomes (O)",             type:"textarea" },
-  { id:"sample_size_total",     label:"Total N",                type:"text" },
-  { id:"sample_size_per_group", label:"N per group",            type:"text" },
-  { id:"power_calculation_reported", label:"Power calculation", type:"text" },
-  { id:"setting",               label:"Setting",                type:"text" },
-  { id:"country_region",        label:"Country / Region",       type:"text" },
-  { id:"study_period_enrollment_start", label:"Enrolment start", type:"text" },
-  { id:"study_period_enrollment_end",   label:"Enrolment end",   type:"text" },
-  { id:"follow_up_duration",    label:"Follow-up duration",     type:"text" },
-  { id:"primary_outcome_definition",  label:"Primary outcome — definition",   type:"textarea" },
-  { id:"primary_outcome_measurement", label:"Primary outcome — measurement",  type:"text" },
-  { id:"primary_outcome_timing",      label:"Primary outcome — timing",       type:"text" },
-  { id:"secondary_outcomes",    label:"Secondary outcomes",     type:"textarea" },
-  { id:"key_findings_effect_estimate",label:"Effect estimate",  type:"text" },
-  { id:"key_findings_metric",   label:"Metric (HR/OR/MD/etc)",  type:"text" },
-  { id:"key_findings_ci_lower", label:"95% CI lower",           type:"text" },
-  { id:"key_findings_ci_upper", label:"95% CI upper",           type:"text" },
-  { id:"key_findings_pvalue",   label:"p-value",                type:"text" },
-  { id:"key_findings_direction",label:"Direction / interpretation", type:"textarea" },
-  { id:"funding_source",        label:"Funding source",         type:"text" },
-  { id:"conflicts_of_interest", label:"Conflicts of interest",  type:"textarea" },
-  { id:"limitations_stated",    label:"Author-stated limitations", type:"textarea" },
-  { id:"protocol_registration", label:"Protocol registration",  type:"text" },
-];
-
-// Layer 2 type-specific fields by study type
-const TYPE_FIELDS = {
-  "Randomized Controlled Trial": [
-    {id:"randomization_method", label:"Randomization method", type:"text"},
-    {id:"allocation_concealment", label:"Allocation concealment", type:"text"},
-    {id:"allocation_ratio", label:"Allocation ratio", type:"text"},
-    {id:"stratification_factors", label:"Stratification factors", type:"text"},
-    {id:"baseline_balance", label:"Baseline balance", type:"text"},
-    {id:"blinding_participants", label:"Blinding — participants", type:"text"},
-    {id:"blinding_personnel", label:"Blinding — personnel", type:"text"},
-    {id:"blinding_outcome_assessors", label:"Blinding — outcome assessors", type:"text"},
-    {id:"protocol_deviations", label:"Protocol deviations", type:"textarea"},
-    {id:"analysis_framework", label:"Analysis framework (ITT/PP/AT)", type:"text"},
-    {id:"attrition_rate", label:"Attrition rate", type:"text"},
-    {id:"missing_data_handling", label:"Missing data handling", type:"text"},
-    {id:"outcome_measurement_method", label:"Outcome measurement method", type:"text"},
-    {id:"protocol_available", label:"Protocol available", type:"text"},
-    {id:"outcomes_match_protocol", label:"Outcomes match protocol", type:"text"},
-    {id:"consort_flow_diagram", label:"CONSORT flow diagram", type:"text"},
-  ],
-  "Cluster Randomized Trial": [
-    {id:"cluster_unit", label:"Cluster unit", type:"text"},
-    {id:"n_clusters", label:"N clusters per arm", type:"text"},
-    {id:"icc_reported", label:"ICC reported", type:"text"},
-    {id:"recruitment_after_randomization", label:"Recruitment after randomization", type:"text"},
-    {id:"clustering_in_analysis", label:"Clustering in analysis", type:"text"},
-    {id:"contamination_risk", label:"Contamination risk", type:"textarea"},
-  ],
-  "Crossover Trial": [
-    {id:"washout_period", label:"Washout period", type:"text"},
-    {id:"carryover_assessment", label:"Carryover assessment", type:"text"},
-    {id:"period_effects", label:"Period effects", type:"text"},
-    {id:"sequence_order", label:"Sequence order", type:"text"},
-    {id:"paired_analysis", label:"Paired analysis used", type:"text"},
-  ],
-  "Non-Randomized Trial": [
-    {id:"concurrent_control_confirmed", label:"Concurrent control confirmed", type:"text"},
-    {id:"allocation_mechanism", label:"Allocation mechanism", type:"textarea"},
-    {id:"baseline_comparability", label:"Baseline comparability", type:"textarea"},
-    {id:"confounding_control", label:"Confounding control method", type:"text"},
-    {id:"blinding", label:"Blinding", type:"text"},
-  ],
-  "Single-Arm Trial": [
-    {id:"primary_endpoint_prespecified", label:"Primary endpoint pre-specified", type:"text"},
-    {id:"inclusion_exclusion_criteria", label:"Inclusion/exclusion criteria", type:"textarea"},
-    {id:"comparator_historical_reference", label:"Historical reference or benchmark", type:"text"},
-    {id:"consecutive_enrolment", label:"Consecutive enrolment", type:"text"},
-  ],
-  "Dose-Escalation Study": [
-    {id:"escalation_scheme", label:"Escalation scheme (3+3/CRM/BOIN)", type:"text"},
-    {id:"dlt_definition", label:"DLT definition", type:"textarea"},
-    {id:"dose_levels", label:"Dose levels evaluated", type:"text"},
-    {id:"mtd_declared", label:"MTD declared", type:"text"},
-    {id:"rp2d", label:"RP2D selected", type:"text"},
-    {id:"expansion_cohort", label:"Expansion cohort included", type:"text"},
-    {id:"pk_pd_reported", label:"PK/PD data reported", type:"text"},
-  ],
-  "Interrupted Time Series": [
-    {id:"n_data_points_pre", label:"N data points pre-intervention", type:"text"},
-    {id:"n_data_points_post", label:"N data points post-intervention", type:"text"},
-    {id:"intervention_date", label:"Intervention date", type:"text"},
-    {id:"control_series", label:"Control series present", type:"text"},
-    {id:"statistical_method", label:"Statistical method (seg. regression/ARIMA)", type:"text"},
-    {id:"level_change", label:"Level change estimate (CI)", type:"text"},
-    {id:"slope_change", label:"Slope change estimate (CI)", type:"text"},
-    {id:"autocorrelation_addressed", label:"Autocorrelation addressed", type:"text"},
-    {id:"seasonality_adjustment", label:"Seasonality adjustment", type:"text"},
-    {id:"concurrent_events", label:"Concurrent events / confounders", type:"textarea"},
-  ],
-  "Difference-in-Differences": [
-    {id:"exogenous_event", label:"Exogenous event exploited", type:"textarea"},
-    {id:"parallel_trends_evidence", label:"Parallel trends evidence", type:"textarea"},
-    {id:"n_pre_period_points", label:"N pre-period time points", type:"text"},
-    {id:"interaction_term", label:"Post × Treatment estimate (CI)", type:"text"},
-    {id:"common_shocks", label:"Common shocks controlled", type:"text"},
-    {id:"staggered_adoption", label:"Staggered adoption", type:"text"},
-  ],
-  "Regression Discontinuity": [
-    {id:"running_variable", label:"Running variable", type:"text"},
-    {id:"cutoff_value", label:"Cutoff value", type:"text"},
-    {id:"sharp_vs_fuzzy", label:"Sharp vs fuzzy design", type:"text"},
-    {id:"bandwidth_selection", label:"Bandwidth selection method", type:"text"},
-    {id:"manipulation_testing", label:"Manipulation testing (McCrary)", type:"text"},
-    {id:"continuity_plots", label:"Continuity plots present", type:"text"},
-  ],
-  "Cohort Study": [
-    {id:"exposure_definition", label:"Exposure definition", type:"textarea"},
-    {id:"exposure_measurement", label:"Exposure measurement", type:"text"},
-    {id:"comparator_group", label:"Comparator group definition", type:"textarea"},
-    {id:"outcome_ascertainment", label:"Outcome ascertainment", type:"text"},
-    {id:"confounders_measured", label:"Confounders measured & adjusted", type:"textarea"},
-    {id:"adjustment_method", label:"Adjustment method", type:"text"},
-    {id:"loss_to_follow_up", label:"Loss to follow-up", type:"text"},
-    {id:"immortal_time_bias", label:"Immortal time bias assessment", type:"textarea"},
-  ],
-  "Case-Control": [
-    {id:"case_definition", label:"Case definition", type:"textarea"},
-    {id:"case_source", label:"Case source", type:"text"},
-    {id:"control_selection", label:"Control selection", type:"textarea"},
-    {id:"matching", label:"Matching variables & ratio", type:"text"},
-    {id:"exposure_ascertainment", label:"Exposure ascertainment", type:"text"},
-    {id:"recall_bias_risk", label:"Recall bias risk", type:"text"},
-  ],
-  "Diagnostic Accuracy": [
-    {id:"index_test", label:"Index test", type:"textarea"},
-    {id:"reference_standard", label:"Reference standard", type:"textarea"},
-    {id:"blinding_index_to_reference", label:"Blinding — index to reference", type:"text"},
-    {id:"blinding_reference_to_index", label:"Blinding — reference to index", type:"text"},
-    {id:"two_by_two_table", label:"2×2 table (TP/FP/FN/TN)", type:"text"},
-    {id:"spectrum_of_patients", label:"Spectrum of patients", type:"textarea"},
-    {id:"verification_bias", label:"Verification bias", type:"text"},
-    {id:"threshold_effects", label:"Threshold / ROC analysis", type:"text"},
-    {id:"flow_and_timing", label:"Flow and timing", type:"text"},
-  ],
-  "Prognostic Factor Study": [
-    {id:"prognostic_factor", label:"Prognostic factor & measurement", type:"textarea"},
-    {id:"outcome_definition", label:"Outcome definition & measurement", type:"textarea"},
-    {id:"study_participation", label:"Study participation (QUIPS D1)", type:"text"},
-    {id:"study_attrition", label:"Study attrition (QUIPS D2)", type:"text"},
-    {id:"pf_measurement", label:"PF measurement (QUIPS D3)", type:"text"},
-    {id:"confounding_control", label:"Confounders controlled (QUIPS D5)", type:"textarea"},
-    {id:"statistical_analysis", label:"Statistical analysis (QUIPS D6)", type:"textarea"},
-  ],
-  "Prediction Model Study": [
-    {id:"predictors_candidate", label:"Candidate predictors", type:"textarea"},
-    {id:"predictor_selection_method", label:"Predictor selection method", type:"text"},
-    {id:"model_type", label:"Model type (Cox/logistic/etc)", type:"text"},
-    {id:"discrimination", label:"Discrimination (C-statistic / AUC)", type:"text"},
-    {id:"calibration", label:"Calibration (H-L test / plot)", type:"text"},
-    {id:"model_presentation", label:"Model presentation (nomogram/calculator)", type:"text"},
-    {id:"model_stage", label:"Model stage (development/validation/update)", type:"text"},
-  ],
-  "SR without Meta-Analysis": [
-    {id:"search_strategy", label:"Search strategy (databases, dates)", type:"textarea"},
-    {id:"inclusion_criteria", label:"Inclusion criteria", type:"textarea"},
-    {id:"study_selection", label:"Study selection process", type:"text"},
-    {id:"data_extraction", label:"Data extraction method", type:"text"},
-    {id:"included_studies_n", label:"N included studies", type:"text"},
-    {id:"rob_tool_used", label:"RoB tool used on included studies", type:"text"},
-    {id:"synthesis_method", label:"Synthesis method", type:"textarea"},
-    {id:"grade_assessment", label:"GRADE assessment", type:"text"},
-    {id:"prisma_flow", label:"PRISMA flow diagram", type:"text"},
-  ],
-  "SR with Meta-Analysis": [
-    {id:"search_strategy", label:"Search strategy", type:"textarea"},
-    {id:"inclusion_criteria", label:"Inclusion criteria", type:"textarea"},
-    {id:"included_studies_n", label:"N included studies", type:"text"},
-    {id:"effect_measure", label:"Effect measure (HR/OR/MD)", type:"text"},
-    {id:"pooled_estimate", label:"Pooled estimate (CI)", type:"text"},
-    {id:"pooling_model", label:"Pooling model (fixed/random)", type:"text"},
-    {id:"heterogeneity", label:"Heterogeneity (I², τ², Q)", type:"text"},
-    {id:"publication_bias", label:"Publication bias assessment", type:"text"},
-    {id:"sensitivity_analyses", label:"Sensitivity analyses", type:"textarea"},
-    {id:"subgroup_analyses", label:"Subgroup analyses", type:"textarea"},
-    {id:"grade_assessment", label:"GRADE certainty", type:"text"},
-    {id:"prisma_flow", label:"PRISMA flow diagram", type:"text"},
-  ],
-};
-// Alias types that share fields
-TYPE_FIELDS["Stepped-Wedge Cluster RCT"] = TYPE_FIELDS["Cluster Randomized Trial"];
-TYPE_FIELDS["Uncontrolled Before-After"] = [
-  {id:"pre_measurement", label:"Pre-intervention measurement", type:"text"},
-  {id:"post_measurement", label:"Post-intervention measurement", type:"text"},
-  {id:"secular_trend_risk", label:"Secular trend risk", type:"text"},
-  {id:"regression_to_mean_risk", label:"Regression to mean risk", type:"text"},
-  {id:"concurrent_events", label:"Concurrent events", type:"textarea"},
-];
-TYPE_FIELDS["Cross-Sectional (Analytical)"] = [
-  {id:"sampling_method", label:"Sampling method", type:"text"},
-  {id:"response_rate", label:"Response rate", type:"text"},
-  {id:"exposure_outcome_simultaneity", label:"Simultaneity acknowledged", type:"text"},
-  {id:"adjustment_method", label:"Adjustment method", type:"text"},
-];
-TYPE_FIELDS["Mendelian Randomization"] = [
-  {id:"instrument_variants", label:"Instrument variants (SNPs, GWAS source)", type:"textarea"},
-  {id:"f_statistic", label:"F-statistic (instrument strength)", type:"text"},
-  {id:"mr_design", label:"MR design (1-sample/2-sample/MV)", type:"text"},
-  {id:"sample_overlap", label:"Sample overlap", type:"text"},
-  {id:"pleiotropy_tests", label:"Pleiotropy tests (Egger/PRESSO/WM)", type:"textarea"},
-  {id:"exclusion_restriction", label:"Exclusion restriction argument", type:"textarea"},
-];
-TYPE_FIELDS["Economic Evaluation"] = [
-  {id:"evaluation_type", label:"Evaluation type (CEA/CUA/CBA/BIA)", type:"text"},
-  {id:"perspective", label:"Perspective (societal/payer/etc)", type:"text"},
-  {id:"time_horizon", label:"Time horizon", type:"text"},
-  {id:"discount_rate", label:"Discount rate", type:"text"},
-  {id:"model_type", label:"Model type (Markov/decision tree/etc)", type:"text"},
-  {id:"cost_inputs", label:"Cost inputs", type:"textarea"},
-  {id:"effectiveness_source", label:"Effectiveness data source", type:"text"},
-  {id:"icer", label:"ICER (WTP threshold)", type:"text"},
-  {id:"sensitivity_analysis", label:"Sensitivity analysis (PSA/tornado)", type:"text"},
-];
-TYPE_FIELDS["Guideline / Consensus"] = [
-  {id:"guideline_organization", label:"Issuing organisation", type:"text"},
-  {id:"panel_composition", label:"Panel composition & COI management", type:"textarea"},
-  {id:"evidence_base", label:"Evidence base (SR underpinning)", type:"textarea"},
-  {id:"grade_used", label:"GRADE or equivalent used", type:"text"},
-  {id:"recommendations", label:"Key recommendations (strength + certainty)", type:"textarea"},
-  {id:"updating_plan", label:"Update plan / living status", type:"text"},
-];
-TYPE_FIELDS["Qualitative Research"] = [
-  {id:"methodology", label:"Qualitative methodology", type:"text"},
-  {id:"data_collection", label:"Data collection method", type:"text"},
-  {id:"sampling_strategy", label:"Sampling strategy", type:"text"},
-  {id:"data_saturation", label:"Thematic saturation", type:"text"},
-  {id:"reflexivity", label:"Researcher reflexivity", type:"textarea"},
-  {id:"themes", label:"Major themes identified", type:"textarea"},
-];
-
-// Layer 3 modifier fields (always shown)
-const MODIFIER_FIELDS = [
-  {id:"clinical_trial_phase", label:"Clinical trial phase", type:"select", opts:["","Phase I","Phase I/II","Phase II","Phase II/III","Phase III","Phase IV","Not applicable"]},
-  {id:"regulatory_context", label:"Regulatory context", type:"text"},
-  {id:"registration_number", label:"Registry ID", type:"text"},
-  {id:"industry_sponsored", label:"Industry-sponsored", type:"select", opts:["","Yes","No","Partial"]},
-  {id:"data_source_type", label:"Data source type", type:"text"},
-  {id:"database_name", label:"Database name", type:"text"},
-  {id:"adaptive_design", label:"Adaptive design", type:"select", opts:["","Yes","No"]},
-  {id:"pragmatic_vs_explanatory", label:"Pragmatic vs explanatory", type:"select", opts:["","Pragmatic","Mostly pragmatic","Balanced","Mostly explanatory","Explanatory"]},
-  {id:"trial_framework", label:"Trial framework", type:"select", opts:["","Superiority","Non-inferiority","Equivalence"]},
-  {id:"target_trial_emulation", label:"Target trial emulation", type:"select", opts:["","Yes","No"]},
-  {id:"pilot_or_feasibility", label:"Pilot / feasibility study", type:"select", opts:["","Yes","No"]},
-];
-
-// Span highlight colour palette per field group
-const FIELD_COLOURS = [
-  "#4fc3f7","#81c784","#ffb74d","#f48fb1","#ce93d8",
-  "#80cbc4","#a5d6a7","#fff176","#ffcc80","#ef9a9a",
-];
-let fieldColorMap = {};
-let colorIdx = 0;
-function getFieldColour(fieldId) {
-  if (!fieldColorMap[fieldId]) {
-    fieldColorMap[fieldId] = FIELD_COLOURS[colorIdx++ % FIELD_COLOURS.length];
-  }
-  return fieldColorMap[fieldId];
+function checkSession() {
+  if (sessionStorage.getItem(SESSION_KEY) === 'true') showApp();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════════════════════
-let currentPaperId = null;
-let currentFilename = null;
-let pdfDoc = null;
-let currentPage = 1;
-let totalPages = 1;
-let zoomLevel = 1.2;
-let activeField = null;         // id of field currently receiving span links
-let activeFieldBtn = null;      // button element
-let pendingSelection = null;    // {text, page, x0,y0,x1,y1} from current text selection
-let spans = [];                 // [{field_name, page, text, x0,y0,x1,y1}]
-let reviewerAction = "Confirm";
+function showApp() {
+  document.getElementById('login-gate').classList.add('hidden');
+  document.getElementById('app').classList.add('visible');
+  requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(drawLines)));
+}
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+function logout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('login-gate').classList.remove('hidden');
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('pw').value = '';
+  document.getElementById('login-error').textContent = '';
+}
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BUILD DYNAMIC FORM SECTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-function buildField(f) {
-  const div = document.createElement('div');
-  div.className = 'field-row';
-  div.id = 'fr-' + f.id;
-
-  const lbl = document.createElement('div');
-  lbl.className = 'field-label';
-  lbl.innerHTML = `${f.label}
-    <button class="field-anchor-btn" data-field="${f.id}"
-      onclick="setActiveField('${f.id}', this)">anchor</button>`;
-  div.appendChild(lbl);
-
-  let el;
-  if (f.type === 'textarea') {
-    el = document.createElement('textarea');
-  } else if (f.type === 'select') {
-    el = document.createElement('select');
-    (f.opts || []).forEach(o => {
-      const opt = document.createElement('option');
-      opt.value = o; opt.textContent = o;
-      el.appendChild(opt);
-    });
+document.getElementById('login-btn').addEventListener('click', () => {
+  const pw = document.getElementById('pw').value;
+  if (!pw) { document.getElementById('login-error').textContent = 'Please enter a password.'; return; }
+  if (pw === 'OGAI2026') {
+    sessionStorage.setItem(SESSION_KEY, 'true');
+    showApp();
   } else {
-    el = document.createElement('input');
-    el.type = 'text';
-  }
-  el.id = 'f-' + f.id;
-  el.setAttribute('data-field', f.id);
-  div.appendChild(el);
-
-  // Span tag container
-  const stc = document.createElement('div');
-  stc.id = 'spans-' + f.id;
-  div.appendChild(stc);
-
-  return div;
-}
-
-function buildSection(fields, container) {
-  container.innerHTML = '';
-  fields.forEach(f => container.appendChild(buildField(f)));
-}
-
-buildSection(UNIVERSAL_FIELDS, document.getElementById('universal-fields'));
-buildSection(MODIFIER_FIELDS, document.getElementById('modifier-fields'));
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TAXONOMY DROPDOWNS
-// ═══════════════════════════════════════════════════════════════════════════
-function onMajorCatChange() {
-  const v = document.getElementById('f-major_category').value;
-  const sub = document.getElementById('f-subcategory');
-  sub.innerHTML = '<option value="">— select —</option>';
-  (SUBCATS[v] || []).forEach(s => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s;
-    sub.appendChild(o);
-  });
-  document.getElementById('f-study_type').innerHTML = '<option value="">— select subcategory first —</option>';
-  updateTypeSpecific('');
-}
-
-function onSubcatChange() {
-  const v = document.getElementById('f-subcategory').value;
-  const st = document.getElementById('f-study_type');
-  st.innerHTML = '<option value="">— select —</option>';
-  (STUDY_TYPES[v] || []).forEach(s => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s;
-    st.appendChild(o);
-  });
-  updateTypeSpecific('');
-}
-
-function onStudyTypeChange() {
-  updateTypeSpecific(document.getElementById('f-study_type').value);
-}
-
-function updateTypeSpecific(studyType) {
-  const sec = document.getElementById('type-specific-section');
-  const container = document.getElementById('type-specific-fields');
-  const header = document.getElementById('type-specific-header');
-  const fields = TYPE_FIELDS[studyType];
-  if (fields && fields.length) {
-    header.textContent = `Layer 2 · ${studyType} Fields  (${ROB_MAP[studyType] || ''})`;
-    buildSection(fields, container);
-    sec.style.display = 'block';
-  } else {
-    sec.style.display = 'none';
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ACTIVE FIELD & SPAN LINKING
-// ═══════════════════════════════════════════════════════════════════════════
-function setActiveField(fieldId, btn) {
-  // Toggle off if same field clicked again
-  if (activeField === fieldId) {
-    clearActiveField();
-    return;
-  }
-  if (activeFieldBtn) {
-    activeFieldBtn.textContent = isFieldLinked(activeField) ? 'linked ✓' : 'anchor';
-    activeFieldBtn.classList.remove('active');
-    const prev = document.getElementById('fr-' + activeField);
-    if (prev) prev.classList.remove('active-field');
-  }
-  activeField = fieldId;
-  activeFieldBtn = btn;
-  btn.textContent = '● active';
-  btn.classList.add('active');
-  const row = document.getElementById('fr-' + fieldId);
-  if (row) row.classList.add('active-field');
-
-  document.getElementById('active-field-banner').style.display = 'block';
-  document.getElementById('active-field-banner').textContent = `📎 Select text in PDF to link → "${fieldId}"`;
-
-  // If there's a pending selection, show link button
-  if (pendingSelection) showLinkBtn();
-}
-
-function clearActiveField() {
-  if (activeFieldBtn) {
-    activeFieldBtn.textContent = isFieldLinked(activeField) ? 'linked ✓' : 'anchor';
-    activeFieldBtn.classList.remove('active');
-    const row = document.getElementById('fr-' + activeField);
-    if (row) row.classList.remove('active-field');
-  }
-  activeField = null;
-  activeFieldBtn = null;
-  document.getElementById('active-field-banner').style.display = 'none';
-  hideLinkBtn();
-}
-
-function isFieldLinked(fieldId) {
-  return spans.some(s => s.field_name === fieldId);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TEXT SELECTION IN PDF
-// ═══════════════════════════════════════════════════════════════════════════
-document.addEventListener('mouseup', handleMouseUp);
-
-function handleMouseUp(e) {
-  // Ignore clicks inside link button itself
-  if (e.target.id === 'link-btn' || e.target.closest('#link-btn')) return;
-
-  const sel = window.getSelection();
-  const text = sel ? sel.toString().trim() : '';
-  if (!text || text.length < 2) {
-    pendingSelection = null;
-    hideLinkBtn();
-    return;
-  }
-
-  // Check the selection is within a PDF text layer
-  const range = sel.rangeCount ? sel.getRangeAt(0) : null;
-  if (!range) return;
-  const container = range.commonAncestorContainer;
-  const textLayer = container.nodeType === 1
-    ? container.closest('.textLayer')
-    : container.parentElement?.closest('.textLayer');
-  if (!textLayer) { pendingSelection = null; hideLinkBtn(); return; }
-
-  // Find page number
-  const pageWrapper = textLayer.closest('.page-wrapper');
-  const pageNum = pageWrapper ? parseInt(pageWrapper.dataset.page) : currentPage;
-
-  // Get bounding rect of selection relative to page canvas
-  const rects = range.getClientRects();
-  const canvasEl = pageWrapper?.querySelector('canvas');
-  const canvasRect = canvasEl ? canvasEl.getBoundingClientRect() : null;
-
-  let x0=null,y0=null,x1=null,y1=null;
-  if (canvasRect && rects.length) {
-    const scale = (canvasEl.width / canvasRect.width);
-    x0 = (rects[0].left - canvasRect.left) * scale;
-    y0 = (rects[0].top  - canvasRect.top)  * scale;
-    x1 = (rects[rects.length-1].right  - canvasRect.left) * scale;
-    y1 = (rects[rects.length-1].bottom - canvasRect.top)  * scale;
-  }
-
-  pendingSelection = { text, page: pageNum, x0, y0, x1, y1 };
-
-  if (activeField) {
-    showLinkBtn(e.clientX, e.clientY);
-  }
-}
-
-function showLinkBtn(x, y) {
-  const btn = document.getElementById('link-btn');
-  document.getElementById('link-btn-field').textContent = activeField || '?';
-  if (x && y) {
-    btn.style.left = Math.min(x + 8, window.innerWidth - 220) + 'px';
-    btn.style.top  = Math.max(y - 40, 50) + 'px';
-  }
-  btn.style.display = 'block';
-}
-
-function hideLinkBtn() {
-  document.getElementById('link-btn').style.display = 'none';
-}
-
-function linkSelection() {
-  if (!pendingSelection || !activeField) return;
-  const span = { ...pendingSelection, field_name: activeField };
-  // Remove previous span for same field (one span per field)
-  spans = spans.filter(s => s.field_name !== activeField);
-  spans.push(span);
-  window.getSelection()?.removeAllRanges();
-  pendingSelection = null;
-  hideLinkBtn();
-  renderSpanTags();
-  renderHighlights();
-  // Update anchor button
-  if (activeFieldBtn) {
-    activeFieldBtn.textContent = 'linked ✓';
-    activeFieldBtn.classList.remove('active');
-    activeFieldBtn.classList.add('linked');
-  }
-  clearActiveField();
-}
-
-function removeSpan(fieldName) {
-  spans = spans.filter(s => s.field_name !== fieldName);
-  renderSpanTags();
-  renderHighlights();
-  // Reset button
-  const btn = document.querySelector(`.field-anchor-btn[data-field="${fieldName}"]`);
-  if (btn) { btn.textContent = 'anchor'; btn.classList.remove('linked','active'); }
-}
-
-function renderSpanTags() {
-  // Clear all span tag containers first
-  document.querySelectorAll('[id^="spans-"]').forEach(c => c.innerHTML = '');
-  spans.forEach(s => {
-    const container = document.getElementById('spans-' + s.field_name);
-    if (!container) return;
-    const colour = getFieldColour(s.field_name);
-    const tag = document.createElement('div');
-    tag.className = 'span-tag';
-    tag.style.borderColor = colour + '80';
-    tag.style.background = colour + '18';
-    tag.innerHTML = `
-      <span class="st-text">"${s.text.substring(0,80)}${s.text.length>80?'…':''}"</span>
-      <span class="st-loc">p.${s.page}</span>
-      <button class="st-del" onclick="removeSpan('${s.field_name}')" title="Remove link">✕</button>`;
-    container.appendChild(tag);
-
-    // Auto-populate the field input if empty
-    const el = document.getElementById('f-' + s.field_name);
-    if (el && !el.value) el.value = s.text;
-
-    // Update anchor button
-    const btn = document.querySelector(`.field-anchor-btn[data-field="${s.field_name}"]`);
-    if (btn) { btn.textContent = 'linked ✓'; btn.classList.add('linked'); btn.classList.remove('active'); }
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// PDF RENDERING
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadPdf(paperId, filename) {
-  currentPaperId = paperId;
-  currentFilename = filename;
-  document.getElementById('save-status').textContent = filename;
-  spans = [];
-  renderSpanTags();
-
-  const url = `/api/papers/${paperId}/pdf`;
-  try {
-    pdfDoc = await pdfjsLib.getDocument(url).promise;
-    totalPages = pdfDoc.numPages;
-    currentPage = 1;
-    document.getElementById('page-info').textContent = `/ ${totalPages}`;
-    await renderAllPages();
-    await loadExistingAnnotation();
-  } catch(err) {
-    alert('Failed to load PDF: ' + err.message);
-  }
-}
-
-async function renderAllPages() {
-  const scroll = document.getElementById('pdf-scroll');
-  scroll.innerHTML = '';
-  for (let p = 1; p <= totalPages; p++) {
-    await renderPage(p, scroll);
-  }
-}
-
-async function renderPage(pageNum, container) {
-  const page = await pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale: zoomLevel });
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'page-wrapper';
-  wrapper.dataset.page = pageNum;
-  wrapper.style.width = viewport.width + 'px';
-  wrapper.style.height = viewport.height + 'px';
-
-  // Canvas
-  const canvas = document.createElement('canvas');
-  canvas.width  = viewport.width;
-  canvas.height = viewport.height;
-  wrapper.appendChild(canvas);
-
-  // Render PDF page
-  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-
-  // Text layer for selection
-  const textDiv = document.createElement('div');
-  textDiv.className = 'textLayer';
-  textDiv.style.width  = viewport.width  + 'px';
-  textDiv.style.height = viewport.height + 'px';
-  wrapper.appendChild(textDiv);
-
-  const textContent = await page.getTextContent();
-  await pdfjsLib.renderTextLayer({
-    textContent,
-    container: textDiv,
-    viewport,
-    textDivs: [],
-  }).promise;
-
-  // Span overlay
-  const overlay = document.createElement('div');
-  overlay.className = 'span-overlay';
-  overlay.id = `overlay-p${pageNum}`;
-  overlay.style.width  = viewport.width  + 'px';
-  overlay.style.height = viewport.height + 'px';
-  wrapper.appendChild(overlay);
-
-  container.appendChild(wrapper);
-}
-
-function renderHighlights() {
-  if (!pdfDoc) return;
-  // Clear all overlays
-  document.querySelectorAll('.span-overlay').forEach(o => o.innerHTML = '');
-
-  spans.forEach(s => {
-    if (!s.x0 || !s.y0) return;
-    const overlay = document.getElementById(`overlay-p${s.page}`);
-    if (!overlay) return;
-    const colour = getFieldColour(s.field_name);
-    const box = document.createElement('div');
-    box.className = 'span-box';
-    box.title = `${s.field_name}: "${s.text.substring(0,60)}"`;
-    box.style.cssText = `
-      left:${s.x0}px; top:${s.y0}px;
-      width:${s.x1-s.x0}px; height:${Math.max(s.y1-s.y0,8)}px;
-      background:${colour}40; border:1.5px solid ${colour};
-    `;
-    box.onclick = () => {
-      const el = document.getElementById('fr-' + s.field_name);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
-    overlay.appendChild(box);
-  });
-}
-
-function changePage(delta) {
-  const target = currentPage + delta;
-  if (target < 1 || target > totalPages) return;
-  currentPage = target;
-  document.getElementById('page-input').value = currentPage;
-  const pageEl = document.querySelector(`.page-wrapper[data-page="${currentPage}"]`);
-  if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function gotoPage(val) {
-  const p = Math.max(1, Math.min(parseInt(val)||1, totalPages));
-  currentPage = p;
-  const pageEl = document.querySelector(`.page-wrapper[data-page="${p}"]`);
-  if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-async function changeZoom(delta) {
-  zoomLevel = Math.max(0.4, Math.min(2.5, zoomLevel + delta));
-  document.getElementById('zoom-display').textContent = Math.round(zoomLevel*100) + '%';
-  if (pdfDoc) await renderAllPages();
-  renderHighlights();
-}
-
-// Track current page by scroll position
-document.getElementById('pdf-scroll').addEventListener('scroll', () => {
-  const wrappers = document.querySelectorAll('.page-wrapper');
-  const scroll = document.getElementById('pdf-scroll');
-  const scrollTop = scroll.scrollTop + 40;
-  for (const w of wrappers) {
-    if (w.offsetTop <= scrollTop && w.offsetTop + w.offsetHeight > scrollTop) {
-      currentPage = parseInt(w.dataset.page);
-      document.getElementById('page-input').value = currentPage;
-      break;
-    }
+    document.getElementById('login-error').textContent = 'Incorrect password.';
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// FORM DATA
-// ═══════════════════════════════════════════════════════════════════════════
-function getFormData() {
-  const data = {};
-  document.querySelectorAll('[id^="f-"]').forEach(el => {
-    const key = el.id.slice(2);
-    data[key] = el.value || '';
-  });
-  data.reviewer_action = reviewerAction;
-  return data;
-}
+document.getElementById('pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
 
-function setFormData(data) {
-  if (!data) return;
-  // Set major/sub/type first (triggers cascades)
-  if (data.major_category) {
-    const el = document.getElementById('f-major_category');
-    el.value = data.major_category;
-    onMajorCatChange();
-  }
-  if (data.subcategory) {
-    const el = document.getElementById('f-subcategory');
-    el.value = data.subcategory;
-    onSubcatChange();
-  }
-  if (data.study_type) {
-    const el = document.getElementById('f-study_type');
-    el.value = data.study_type;
-    onStudyTypeChange();
-  }
-  // Fill all other fields
-  setTimeout(() => {
-    Object.entries(data).forEach(([k,v]) => {
-      const el = document.getElementById('f-' + k);
-      if (el && v !== undefined) el.value = v;
-    });
-    if (data.reviewer_action) setAction(data.reviewer_action, false);
-  }, 50);
-}
+document.getElementById('logout-btn').addEventListener('click', logout);
 
-function setAction(action, visual=true) {
-  reviewerAction = action;
-  if (!visual) return;
-  ['Confirm','Correct','Flag'].forEach(a => {
-    const btn = document.getElementById('btn-' + a.toLowerCase());
-    if (btn) btn.style.fontWeight = (a===action) ? '900' : '700';
-    if (btn) btn.style.outline = (a===action) ? '2px solid #1e293b' : 'none';
-  });
-}
+// PDF sidebar toggle
+document.getElementById('rob-toggle').addEventListener('click', function() {
+  const sb = document.getElementById('pdf-sidebar');
+  sb.classList.toggle('open');
+  this.classList.toggle('active');
+  setTimeout(drawLines, 280);
+});
 
-// ═══════════════════════════════════════════════════════════════════════════
-// API CALLS
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadPapers() {
-  const res = await fetch('/api/papers');
-  const papers = await res.json();
-  const list = document.getElementById('paper-list');
-  list.innerHTML = '';
-  papers.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'paper-item' + (p.id===currentPaperId?' active':'');
-    div.onclick = () => { selectPaper(p); };
-    const done = p.annotated_by.length > 0;
-    div.innerHTML = `
-      <div class="pi-name" title="${p.filename}">${p.filename}</div>
-      <div class="pi-meta">${p.annotated_by.join(', ') || 'no annotations'}</div>
-      <span class="pi-chip ${done?'done':'none'}">${done?'annotated':'pending'}</span>`;
-    list.appendChild(div);
-  });
-}
+checkSession();
 
-function selectPaper(p) {
-  document.querySelectorAll('.paper-item').forEach(el => el.classList.remove('active'));
-  event?.currentTarget?.classList.add('active');
-  loadPdf(p.id, p.filename);
-}
+/* ── TAXONOMY DATA (36 Study Types) ── */
+const D = {
+  l:"Study Designs", c:"root", ch:[
+    {l:"Experimental Studies<br>(Interventional)", c:"major", ch:[
+      {l:"Randomized<br>Experiments", c:"sub", ch:[
+        {l:"Randomized<br>Controlled Trial", c:"st", t:"Individuals randomized to intervention vs control", r:"RoB 2", p:1},
+        {l:"Cluster<br>Randomized Trial", c:"st", t:"Groups (e.g., clinics) randomized rather than individuals", r:"RoB 2", p:1},
+        {l:"Stepped-Wedge<br>Cluster RCT", c:"st", n:1, t:"All clusters eventually receive intervention via staggered rollout over time", r:"RoB 2 (SW-CRT extension)", p:1},
+        {l:"Crossover Trial", c:"st", t:"Participants receive multiple interventions sequentially with washout", r:"RoB 2", p:1},
+      ]},
+      {l:"Quasi-<br>Experimental<br>Studies", c:"sub", ch:[
+        {l:"Non Randomized<br>Trial", c:"st", t:"Intervention assigned without randomization; concurrent comparison group", r:"ROBINS-I", p:1},
+        {l:"Interrupted<br>Time Series", c:"st", t:"≥3 repeated outcome measures before and after intervention with time-series analytics", r:"EPOC", p:1},
+        {l:"Controlled<br>Before-After", c:"st", t:"Intervention vs non-equivalent control group; single pre/post measurement per period", r:"EPOC", p:1},
+        {l:"Uncontrolled<br>Before-After", c:"st", n:1, t:"Single group, single pre/post measurement, no concurrent control. Weakest quasi-experimental design. GRADE: Very Low", r:"EPOC", p:1, v:"1.1"},
+        {l:"Difference in<br>Differences", c:"st", t:"Compares changes over time between exposed/unexposed exploiting exogenous variation", r:"ROBINS-I", p:1},
+        {l:"Regression<br>Discontinuity", c:"st", t:"Assignment based on cutoff or threshold on a running variable", r:"ROBINS-I", p:1},
+        {l:"Natural<br>Experiment", c:"st", t:"External event creates as-if random exposure variation", r:"ROBINS-I", p:1},
+      ]},
+    ]},
+    {l:"Observational<br>Studies", c:"major", ch:[
+      {l:"Descriptive", c:"sub", ch:[
+        {l:"Case Report", c:"st", t:"Detailed description of a single patient or event", r:"CARE Checklist"},
+        {l:"Case Series", c:"st", t:"Description of multiple similar cases, no comparison group", r:"CARE / Murad tool"},
+        {l:"Cross-Sectional<br>(Descriptive)", c:"st", t:"Prevalence survey or snapshot at a single time point", r:"AXIS"},
+        {l:"Ecological Study", c:"st", t:"Unit of analysis is populations/groups, not individuals", r:"No standard tool"},
+      ]},
+      {l:"Analytical", c:"sub", ch:[
+        {l:"Case-Control", c:"st", t:"Sampled by outcome: cases vs controls, looks back at exposure", r:"Newcastle-Ottawa Scale"},
+        {l:"Prospective Cohort", c:"st", t:"Enrolled disease-free, followed forward for incident outcomes", r:"Newcastle-Ottawa Scale / QUIPS"},
+        {l:"Retrospective<br>Cohort", c:"st", t:"Cohort assembled after outcomes occurred from existing records", r:"Newcastle-Ottawa Scale / QUIPS"},
+        {l:"Cross-Sectional<br>(Analytical)", c:"st", t:"Exposure-outcome association assessed at single time point", r:"NOS (adapted)"},
+        {l:"Nested<br>Case-Control", c:"st", t:"Case-control sampled within a defined cohort", r:"Newcastle-Ottawa Scale"},
+        {l:"Case-Cohort", c:"st", t:"Subcohort sampled at baseline; cases ascertained from full cohort", r:"Newcastle-Ottawa Scale"},
+        {l:"Self-Controlled<br>Case Series", c:"st", n:1, t:"Each case serves as own control across risk and non-risk periods", r:"SCCS Checklist"},
+        {l:"Case-Crossover", c:"st", n:1, t:"Within-person comparison of exposure in case vs control windows", r:"NOS (adapted)"},
+        {l:"Mendelian<br>Randomization", c:"st", n:1, t:"Genetic variants as instrumental variables for causal inference", r:"STROBE-MR"},
+      ]},
+      {l:"Diagnostic /<br>Prognostic", c:"sub", ch:[
+        {l:"Diagnostic<br>Accuracy", c:"st", t:"Index test vs reference standard: sensitivity, specificity, LR", r:"QUADAS-2", p:1},
+        {l:"Prognostic<br>Factor Study", c:"st", t:"Does factor X predict outcome Y? HRs/ORs from regression models", r:"QUIPS", p:1},
+        {l:"Prediction<br>Model Study", c:"st", t:"Develops/validates individualized risk prediction tool (c-stat, calibration)", r:"PROBAST", p:1},
+      ]},
+    ]},
+    {l:"Evidence<br>Synthesis", c:"major", ch:[
+      {l:"Reviews", c:"sub", ch:[
+        {l:"Systematic Review", c:"st", t:"Systematic search, selection, and synthesis of primary studies", r:"AMSTAR 2 / ROB-ME", p:1},
+        {l:"Systematic Review<br>with Meta-Analysis", c:"st", t:"Systematic review with statistical pooling of effect estimates", r:"AMSTAR 2 / ROB-ME", p:1},
+        {l:"Umbrella Review", c:"st", t:"Systematic review of systematic reviews", r:"AMSTAR 2", p:1},
+        {l:"Network<br>Meta-Analysis", c:"st", t:"Compares multiple interventions simultaneously via direct and indirect evidence", r:"CINeMA"},
+        {l:"Scoping Review", c:"st", t:"Maps available evidence on a broad topic without formal synthesis", r:"No standard tool"},
+        {l:"Narrative Review", c:"st", t:"Non-systematic summary of literature on a topic", r:"No standard tool"},
+      ]},
+    ]},
+    {l:"Guidance /<br>Consensus", c:"major", ch:[
+      {l:"Guidelines &amp;<br>Consensus", c:"sub", ch:[
+        {l:"Clinical Practice<br>Guideline", c:"st", t:"Systematically developed recommendations for clinical decisions", r:"AGREE II"},
+        {l:"Consensus<br>Statement", c:"st", t:"Expert panel agreement on clinical practice or research direction", r:"AGREE II (adapted)"},
+      ]},
+    ]},
+    {l:"Other", c:"major", ch:[
+      {l:"Specialized<br>Designs", c:"sub", ch:[
+        {l:"Qualitative<br>Research", c:"st", n:1, t:"In-depth exploration of experiences, meanings, perspectives", r:"CASP / COREQ"},
+        {l:"Mixed Methods", c:"st", n:1, t:"Integrates quantitative and qualitative approaches", r:"MMAT"},
+        {l:"Economic<br>Evaluation", c:"st", n:1, t:"Cost-effectiveness, cost-utility, cost-benefit analysis", r:"CHEERS"},
+      ]},
+    ]},
+  ]
+};
 
-async function uploadFiles(files) {
-  for (const file of files) {
-    const form = new FormData();
-    form.append('file', file);
-    await fetch('/api/papers/upload', { method:'POST', body:form });
-  }
-  loadPapers();
-}
+/* ── BUILD TREE ── */
+const edges = [];
 
-function handleDrop(e) {
-  e.preventDefault();
-  uploadFiles(e.dataTransfer.files);
-}
+function build(d) {
+  const row = document.createElement('div');
+  row.className = 'row';
 
-async function loadExistingAnnotation() {
-  const reviewerId = document.getElementById('reviewer-input').value.trim();
-  if (!reviewerId || !currentPaperId) return;
-  try {
-    const res = await fetch(`/api/papers/${currentPaperId}/annotations?reviewer_id=${reviewerId}`);
-    const body = await res.json();
-    if (body.annotations.length) {
-      const ann = body.annotations[0];
-      setFormData(ann.data);
-      spans = body.spans.filter(s => s.reviewer_id === reviewerId);
-      renderSpanTags();
-      setTimeout(renderHighlights, 500);
+  const nd = document.createElement('div');
+  nd.className = 'nd ' + d.c + (d.n ? ' is-new' : '') + (d.p ? ' has-doc' : '');
+  nd.innerHTML = d.l;
+
+  if (d.t) {
+    const tt = document.createElement('div');
+    tt.className = 'tt';
+    let html = d.t;
+    if (d.r) {
+      const hasPdf = d.p ? ' has-pdf' : '';
+      const icon = d.p ? ' 📄' : '';
+      html += '<span class="rob' + hasPdf + '">RoB: ' + d.r + icon + '</span>';
+      if (d.p) html += '<span class="pdf-note">PDF available in project files</span>';
     }
-  } catch(e) { console.warn('No existing annotation:', e); }
+    if (d.n) html += '<span class="new-badge">NEW</span>';
+    if (d.v) html += '<span class="new-badge">v' + d.v + '</span>';
+    tt.innerHTML = html;
+    nd.appendChild(tt);
+  }
+  row.appendChild(nd);
+
+  if (d.ch && d.ch.length) {
+    const col = document.createElement('div');
+    col.className = 'children';
+    d.ch.forEach(child => {
+      const childRow = build(child);
+      col.appendChild(childRow);
+      edges.push([nd, childRow.querySelector('.nd')]);
+    });
+    row.appendChild(col);
+  }
+  return row;
 }
 
-async function saveAnnotation() {
-  const reviewerId = document.getElementById('reviewer-input').value.trim();
-  if (!reviewerId) { alert('Enter your Reviewer ID in the top bar first.'); return; }
-  if (!currentPaperId) { alert('Select a paper first.'); return; }
+document.getElementById('tree').appendChild(build(D));
 
-  const payload = {
-    reviewer_id: reviewerId,
-    data: getFormData(),
-    spans: spans,
-  };
-  const res = await fetch(`/api/papers/${currentPaperId}/annotations`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(payload),
+/* ── DRAW CONNECTOR LINES ── */
+function drawLines() {
+  const container = document.getElementById('tree-container');
+  if (!container) return;
+  const cv = document.getElementById('cv');
+  const dpr = window.devicePixelRatio || 1;
+  const W = container.scrollWidth;
+  const H = container.scrollHeight;
+  cv.width = W * dpr;
+  cv.height = H * dpr;
+  cv.style.width = W + 'px';
+  cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  const cRect = container.getBoundingClientRect();
+  const sx = container.scrollLeft;
+  const sy = container.scrollTop;
+  ctx.strokeStyle = '#a4b8ce';
+  ctx.lineWidth = 1.4;
+  edges.forEach(([p, c]) => {
+    const pr = p.getBoundingClientRect();
+    const cr = c.getBoundingClientRect();
+    const x1 = pr.right - cRect.left + sx;
+    const y1 = pr.top + pr.height / 2 - cRect.top + sy;
+    const x2 = cr.left - cRect.left + sx;
+    const y2 = cr.top + cr.height / 2 - cRect.top + sy;
+    const midX = x1 + (x2 - x1) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.bezierCurveTo(midX, y1, midX, y2, x2, y2);
+    ctx.stroke();
   });
-  const result = await res.json();
-  document.getElementById('save-status').textContent = `saved ${result.timestamp?.slice(11,19) || '✓'}`;
-  loadPapers();
 }
 
-async function exportCSV() {
-  window.open('/api/export/csv', '_blank');
-}
-
-// ── Init ────────────────────────────────────────────────────────────────
-loadPapers();
+window.addEventListener('resize', drawLines);
+document.getElementById('tree-container').addEventListener('scroll', drawLines);
 </script>
 </body>
 </html>

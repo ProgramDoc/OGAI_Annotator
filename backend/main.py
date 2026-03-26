@@ -1,28 +1,35 @@
 """
-OGAI Annotation Platform — Backend
-====================================
+OGAI Annotation Platform — Backend v1.1
+========================================
 FastAPI backend serving:
   - PDF upload and storage
   - Annotation persistence (SQLite)
   - Multi-reviewer support
   - CSV export
+  - AI-assisted field extraction (Anthropic API)
   - Static frontend (index.html)
 
 Run:
     uvicorn main:app --reload --port 8000
 
-Or with multiple workers (shared server):
-    uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+Environment variables:
+    ANTHROPIC_API_KEY   — required for AI auto-fill feature
+    RENDER_DATA_DIR     — set to /data on Render.com; defaults to repo root locally
 """
 
 import json
 import csv
 import io
 import os
+import re
+import base64
 import shutil
 import sqlite3
 import hashlib
+import asyncio
 import datetime
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Optional
 
@@ -36,13 +43,14 @@ from pydantic import BaseModel
 BASE_DIR   = Path(__file__).parent.parent
 FRONTEND   = BASE_DIR / "frontend"
 
+# Use /data (Render persistent disk) in production, repo root locally
 DATA_DIR   = Path(os.environ.get("RENDER_DATA_DIR", str(BASE_DIR)))
 PAPERS_DIR = DATA_DIR / "papers"
 DB_PATH    = DATA_DIR / "annotations.db"
 PAPERS_DIR.mkdir(exist_ok=True)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────
-app = FastAPI(title="OGAI Annotation Platform", version="1.0")
+app = FastAPI(title="OGAI Annotation Platform", version="1.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,14 +103,18 @@ init_db()
 # ── Pydantic models ───────────────────────────────────────────────────────
 class AnnotationSave(BaseModel):
     reviewer_id: str
-    data: dict          # all form field values
-    spans: list[dict]   # [{field_name, page, text, x0, y0, x1, y1}]
+    data: dict
+    spans: list[dict]
 
 class SpanDelete(BaseModel):
     reviewer_id: str
     field_name: str
     page: int
     text: str
+
+class PrefillRequest(BaseModel):
+    study_type: str
+    fields: list[dict]   # [{id, label}] from frontend
 
 # ── Paper endpoints ───────────────────────────────────────────────────────
 
@@ -131,7 +143,6 @@ async def upload_paper(file: UploadFile = File(...)):
         raise HTTPException(400, "Only PDF files are accepted")
 
     content = await file.read()
-    # Use SHA-256 of content as stable ID (deduplication)
     paper_id = hashlib.sha256(content).hexdigest()[:16]
 
     dest = PAPERS_DIR / f"{paper_id}.pdf"
@@ -185,7 +196,6 @@ def delete_paper(paper_id: str):
 @app.get("/api/papers/{paper_id}/annotations")
 def get_annotations(paper_id: str, reviewer_id: Optional[str] = None):
     conn = get_db()
-    # Return all reviewers' annotations for this paper (for IRR view)
     if reviewer_id:
         rows = conn.execute(
             "SELECT reviewer_id, timestamp, data_json FROM annotations WHERE paper_id=? AND reviewer_id=?",
@@ -230,7 +240,6 @@ def save_annotation(paper_id: str, body: AnnotationSave):
             timestamp=excluded.timestamp, data_json=excluded.data_json
     """, (paper_id, body.reviewer_id, now, json.dumps(body.data)))
 
-    # Replace spans for this reviewer/paper
     conn.execute("DELETE FROM spans WHERE paper_id=? AND reviewer_id=?",
                  (paper_id, body.reviewer_id))
     for s in body.spans:
@@ -245,11 +254,123 @@ def save_annotation(paper_id: str, body: AnnotationSave):
     return {"saved": True, "timestamp": now}
 
 
+# ── AI Auto-fill endpoint ─────────────────────────────────────────────────
+
+def _call_anthropic(api_key: str, pdf_b64: str, study_type: str, fields: list) -> dict:
+    """
+    Synchronous Anthropic API call — runs in a thread pool via asyncio.to_thread.
+    Sends the PDF as a base64 document and a structured extraction prompt.
+    Returns dict of {field_id: extracted_value_string}.
+    """
+    field_lines = "\n".join(
+        f'  "{f["id"]}": {f.get("label", f["id"])}'
+        for f in fields
+    )
+    prompt = (
+        f"You are a systematic review data extraction assistant.\n"
+        f"Study type: {study_type}\n\n"
+        f"Extract the following fields from the attached research paper. "
+        f"Return ONLY a valid JSON object — no markdown fences, no preamble, no explanation. "
+        f"Use the exact key names shown. "
+        f"Values must be concise strings (not nested objects). "
+        f"If a field is not reported in the paper, use an empty string \"\".\n\n"
+        f"Fields to extract:\n{{\n{field_lines}\n}}"
+    )
+
+    payload = json.dumps({
+        "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        "max_tokens": 4096,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_b64,
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode(errors="replace")
+        raise RuntimeError(f"Anthropic API error {e.code}: {err_body[:400]}")
+
+    content_blocks = body.get("content", [])
+    text = next((b["text"] for b in content_blocks if b.get("type") == "text"), "")
+    text = text.strip()
+
+    # Strip markdown fences if present
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s*```\s*$", "", text, flags=re.MULTILINE)
+    text = text.strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Model returned non-JSON: {text[:400]}")
+
+
+@app.post("/api/papers/{paper_id}/prefill")
+async def prefill_fields(paper_id: str, body: PrefillRequest):
+    """
+    Extract extraction fields from a PDF using the Anthropic API.
+    Set ANTHROPIC_API_KEY environment variable to enable.
+    Returns dict of {field_id: extracted_value_string}.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            503,
+            "ANTHROPIC_API_KEY is not configured. Add it as an environment variable in the Render dashboard."
+        )
+
+    conn = get_db()
+    row = conn.execute("SELECT file_path FROM papers WHERE id=?", (paper_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Paper not found")
+
+    pdf_path = Path(row["file_path"])
+    if not pdf_path.exists():
+        raise HTTPException(404, "PDF file not found on disk")
+
+    pdf_b64 = base64.b64encode(pdf_path.read_bytes()).decode()
+
+    try:
+        result = await asyncio.to_thread(
+            _call_anthropic, api_key, pdf_b64, body.study_type, body.fields
+        )
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+
+    return result
+
+
 # ── Export endpoint ───────────────────────────────────────────────────────
 
 FLAT_COLS = [
     "paper_id", "filename", "reviewer_id", "timestamp",
-    # Layer 1 universal
     "citation_authors", "citation_year", "citation_title", "citation_journal", "citation_doi",
     "study_objective",
     "population_participants", "population_intervention_exposure",
@@ -263,14 +384,11 @@ FLAT_COLS = [
     "key_findings_ci_lower", "key_findings_ci_upper", "key_findings_pvalue", "key_findings_direction",
     "funding_source", "conflicts_of_interest",
     "author_stated_design", "limitations_stated", "protocol_registration",
-    # Stage 1 classification
     "major_category", "subcategory", "study_type",
     "rule1_pass", "rule2_pass", "rule2b_pass", "rule3_pass",
     "reviewer_action", "author_label_discordance",
     "natural_experiment_flag",
-    # Layer 2 type-specific
     "type_specific_fields_json",
-    # Layer 3 modifiers
     "clinical_trial_phase", "regulatory_context", "registration_number",
     "industry_sponsored", "data_source_type", "database_name",
     "adaptive_design", "pragmatic_vs_explanatory", "trial_framework",
@@ -294,11 +412,10 @@ def export_csv():
     for row in ann_rows:
         data = json.loads(row["data_json"])
         flat = {c: data.get(c, "") for c in FLAT_COLS}
-        flat["paper_id"]   = row["paper_id"]
-        flat["filename"]   = papers.get(row["paper_id"], "")
+        flat["paper_id"]    = row["paper_id"]
+        flat["filename"]    = papers.get(row["paper_id"], "")
         flat["reviewer_id"] = row["reviewer_id"]
-        flat["timestamp"]  = row["timestamp"]
-        # Serialize type_specific back to JSON string for CSV
+        flat["timestamp"]   = row["timestamp"]
         if isinstance(flat.get("type_specific_fields_json"), dict):
             flat["type_specific_fields_json"] = json.dumps(flat["type_specific_fields_json"])
         writer.writerow(flat)
@@ -312,5 +429,4 @@ def export_csv():
 
 
 # ── Serve frontend ────────────────────────────────────────────────────────
-# Mount frontend last so API routes take priority
 app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")
