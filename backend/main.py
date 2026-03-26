@@ -458,11 +458,13 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
     papers = conn.execute(
-        "SELECT id, filename, project_id FROM papers WHERE user_id=? ORDER BY id DESC",
+        "SELECT id, filename, project_id FROM papers WHERE user_id=? AND id IS NOT NULL ORDER BY id DESC",
         (user["id"],),
     ).fetchall()
     result = []
     for p in papers:
+        if not p["id"]:          # skip any null-id rows
+            continue
         reviewers = conn.execute(
             "SELECT reviewer_id FROM annotations WHERE paper_id=?", (p["id"],)
         ).fetchall()
@@ -606,23 +608,48 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
 def get_pdf(paper_id: int, ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
-    row  = conn.execute("SELECT sha256, user_id, disk_filename FROM papers WHERE id=?", (paper_id,)).fetchone()
+
+    # Fetch all potentially useful columns, tolerating missing ones
+    cols = _papers_columns()
+    sel  = ["sha256", "user_id", "disk_filename"]
+    if "file_path" in cols: sel.append("file_path")
+    row  = conn.execute(
+        f"SELECT {','.join(sel)} FROM papers WHERE id=?", (paper_id,)
+    ).fetchone()
     conn.close()
+
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
     if row["user_id"] != user["id"] and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Access denied")
 
+    sha      = row["sha256"] or ""
+    uid      = row["user_id"] or 0
+    disk_fn  = row["disk_filename"] or ""
+    file_path = row["file_path"] if "file_path" in cols else ""
+
+    # Build candidate list — most specific first
     candidates = []
-    if row["disk_filename"]:
-        candidates.append(PAPERS_DIR / row["disk_filename"])
-    sha = row["sha256"] or ""
-    uid = row["user_id"] or 0
+    if disk_fn:
+        candidates.append(PAPERS_DIR / disk_fn)
+    if file_path:
+        # file_path may be just a filename or a full path — try both
+        candidates.append(PAPERS_DIR / Path(file_path).name)
+        candidates.append(Path(file_path))
     if sha:
-        candidates += [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"]
+        candidates += [
+            PAPERS_DIR / f"{sha[:16]}_{uid}.pdf",
+            PAPERS_DIR / f"{sha[:16]}.pdf",
+        ]
+
+    logger.error(f"get_pdf: paper_id={paper_id} sha={sha[:8]} candidates={[str(c) for c in candidates]}")
+
     for c in candidates:
         if c.exists():
+            logger.error(f"get_pdf: serving {c}")
             return FileResponse(str(c), media_type="application/pdf")
+
+    logger.error(f"get_pdf: 404 — none of {[str(c) for c in candidates]} exist. PAPERS_DIR={PAPERS_DIR} contents={list(PAPERS_DIR.iterdir())[:10]}")
     raise HTTPException(status_code=404, detail="PDF file missing from disk")
 
 
@@ -887,7 +914,14 @@ def reset_schema(ogai_session: str | None = Cookie(default=None)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     init_db()
-    return {"status": "ok", "message": "Schema migrations re-applied"}
+    # Also delete rows with no user_id and no usable file (orphans from pre-auth era)
+    conn = get_db()
+    deleted = conn.execute(
+        "DELETE FROM papers WHERE user_id IS NULL"
+    ).rowcount
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "message": f"Schema migrations re-applied; {deleted} orphan rows deleted"}
 
 
 # ─────────────────────────────────────────────
