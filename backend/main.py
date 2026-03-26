@@ -34,9 +34,11 @@ from pydantic import BaseModel
 
 # ── Paths ────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent.parent
-PAPERS_DIR = BASE_DIR / "papers"
 FRONTEND   = BASE_DIR / "frontend"
-DB_PATH    = BASE_DIR / "annotations.db"
+
+DATA_DIR   = Path(os.environ.get("RENDER_DATA_DIR", str(BASE_DIR)))
+PAPERS_DIR = DATA_DIR / "papers"
+DB_PATH    = DATA_DIR / "annotations.db"
 PAPERS_DIR.mkdir(exist_ok=True)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────
