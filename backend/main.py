@@ -520,25 +520,29 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
         logger.error(f"upload: executing {insert_sql} params={insert_vals[:3]}")
 
         conn.execute(insert_sql, insert_vals)
+        rows_inserted = conn.execute("SELECT changes()").fetchone()[0]
         conn.commit()
+        logger.error(f"upload: INSERT changed {rows_inserted} rows")
 
-        # ── Step 4: claim ownership for existing rows ────────────────────
-        if "user_id" in cols:
-            conn.execute("UPDATE papers SET user_id=? WHERE sha256=? AND user_id IS NULL",
-                         (uid, sha))
+        # ── Step 4: claim/update ownership unconditionally ───────────────
+        # The UNIQUE constraint may be on sha256 alone (old schema), meaning
+        # INSERT OR IGNORE silently no-ops when sha256 already exists with a
+        # different user_id. Always UPDATE to stamp our uid and disk_filename.
+        if "user_id" in cols and "sha256" in cols:
+            conn.execute("UPDATE papers SET user_id=? WHERE sha256=?", (uid, sha))
             conn.commit()
-        if "disk_filename" in cols:
-            conn.execute("UPDATE papers SET disk_filename=? WHERE sha256=? AND disk_filename IS NULL",
-                         (disk_fn, sha))
+        if "disk_filename" in cols and "sha256" in cols:
+            conn.execute("UPDATE papers SET disk_filename=? WHERE sha256=?", (disk_fn, sha))
+            conn.commit()
+        if "sha256" in cols:
+            conn.execute("UPDATE papers SET filename=? WHERE sha256=?", (file.filename, sha))
             conn.commit()
 
-        # ── Step 5: fetch row — build SELECT from available columns ──────
+        # ── Step 5: fetch row — SELECT by sha256 only (user_id may be stale) ──
         sel_cols = ["id", "filename"]
         if "project_id" in cols: sel_cols.append("project_id")
 
-        if "sha256" in cols and "user_id" in cols:
-            where, where_params = "sha256=? AND user_id=?", (sha, uid)
-        elif "sha256" in cols:
+        if "sha256" in cols:
             where, where_params = "sha256=?", (sha,)
         else:
             where, where_params = "filename=? ORDER BY id DESC LIMIT 1", (file.filename,)
