@@ -613,15 +613,23 @@ def get_pdf(paper_id: int, ogai_session: str | None = Cookie(default=None)):
     cols = _papers_columns()
     sel  = ["sha256", "user_id", "disk_filename"]
     if "file_path" in cols: sel.append("file_path")
+
+    logger.error(f"get_pdf: looking up id={paper_id} DB={DB_PATH} exists={DB_PATH.exists()}")
+
+    all_ids = conn.execute("SELECT id, user_id FROM papers ORDER BY id DESC LIMIT 5").fetchall()
+    logger.error(f"get_pdf: last 5 rows in papers = {[(r['id'], r['user_id']) for r in all_ids]}")
+
     row  = conn.execute(
         f"SELECT {','.join(sel)} FROM papers WHERE id=?", (paper_id,)
     ).fetchone()
     conn.close()
 
+    logger.error(f"get_pdf: row={dict(row) if row else None}")
+
     if not row:
-        raise HTTPException(status_code=404, detail="Paper not found")
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id} not found in DB at {DB_PATH}")
     if row["user_id"] != user["id"] and user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail=f"Access denied: row uid={row['user_id']} user uid={user['id']}")
 
     sha      = row["sha256"] or ""
     uid      = row["user_id"] or 0
@@ -907,7 +915,7 @@ async def prefill_fields(paper_id: int, body: PrefillRequest, ogai_session: str 
 # ─────────────────────────────────────────────
 # Admin: reset DB schema (adds missing columns)
 # ─────────────────────────────────────────────
-@app.post("/api/admin/reset-schema")
+@app.api_route("/api/admin/reset-schema", methods=["GET","POST"])
 def reset_schema(ogai_session: str | None = Cookie(default=None)):
     """Re-runs init_db() migrations. Safe to call on a live DB — only adds missing columns."""
     user = require_user(ogai_session)
@@ -922,6 +930,30 @@ def reset_schema(ogai_session: str | None = Cookie(default=None)):
     conn.commit()
     conn.close()
     return {"status": "ok", "message": f"Schema migrations re-applied; {deleted} orphan rows deleted"}
+
+
+# ─────────────────────────────────────────────
+# Admin: DB debug info
+# ─────────────────────────────────────────────
+@app.get("/api/admin/debug-db")
+def debug_db(ogai_session: str | None = Cookie(default=None)):
+    """Return DB path, existence, paper rows, and PAPERS_DIR contents."""
+    user = require_user(ogai_session)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    conn = get_db()
+    papers = conn.execute("SELECT id, filename, user_id, sha256, disk_filename FROM papers ORDER BY id DESC LIMIT 20").fetchall()
+    conn.close()
+    disk_files = sorted(str(f.name) for f in PAPERS_DIR.iterdir()) if PAPERS_DIR.exists() else []
+    return {
+        "DB_PATH":     str(DB_PATH),
+        "DB_exists":   DB_PATH.exists(),
+        "PAPERS_DIR":  str(PAPERS_DIR),
+        "papers_dir_exists": PAPERS_DIR.exists(),
+        "disk_files":  disk_files[:30],
+        "paper_rows":  [dict(r) for r in papers],
+        "RENDER_DATA_DIR_env": os.environ.get("RENDER_DATA_DIR", "NOT SET"),
+    }
 
 
 # ─────────────────────────────────────────────
