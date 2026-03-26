@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OGAI Annotation Platform</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a3a5c;
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    }
+    header h1 { font-size: 1.2rem; flex: 1; }
+
+    .reviewer-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .reviewer-bar label { font-size: 0.85rem; opacity: .85; }
+    .reviewer-bar input {
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 0.9rem;
+      width: 120px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr 340px;
+      height: calc(100vh - 52px);
+      overflow: hidden;
+    }
+
+    /* ── Left panel: paper list ── */
+    .panel-papers {
+      background: #fff;
+      border-right: 1px solid #dde3ea;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-papers h2 {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #f7f9fb;
+      border-bottom: 1px solid #dde3ea;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #555;
+    }
+    .upload-area {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #dde3ea;
+    }
+    .upload-area label {
+      display: block;
+      text-align: center;
+      padding: 0.5rem;
+      border: 2px dashed #b0bec5;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #777;
+      transition: border-color .2s;
+    }
+    .upload-area label:hover { border-color: #1a3a5c; color: #1a3a5c; }
+    .upload-area input { display: none; }
+
+    #paper-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+    }
+    #paper-list li {
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      border-bottom: 1px solid #f0f2f5;
+      word-break: break-word;
+      transition: background .15s;
+    }
+    #paper-list li:hover { background: #eef2f7; }
+    #paper-list li.active { background: #d6e4f5; font-weight: 600; }
+
+    /* ── Center panel: PDF viewer ── */
+    .panel-pdf {
+      background: #525659;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pdf-toolbar {
+      background: #3d4043;
+      display: flex;
+      align-items: center;
+      padding: 0.4rem 0.75rem;
+      gap: 0.5rem;
+    }
+    .pdf-toolbar button {
+      background: #5a5e62;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .pdf-toolbar button:hover { background: #72777c; }
+    #page-info { color: #ccc; font-size: 0.8rem; margin: 0 0.5rem; }
+
+    #pdf-canvas-container {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 1rem;
+    }
+    #pdf-canvas {
+      box-shadow: 0 4px 16px rgba(0,0,0,.5);
+      display: block;
+    }
+    #pdf-placeholder {
+      color: #aaa;
+      font-size: 1rem;
+      margin: auto;
+    }
+
+    /* ── Right panel: annotation form ── */
+    .panel-form {
+      background: #fff;
+      border-left: 1px solid #dde3ea;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-form h2 {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #f7f9fb;
+      border-bottom: 1px solid #dde3ea;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #555;
+    }
+    .form-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field select,
+    .field textarea,
+    .field input[type="text"] {
+      width: 100%;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid #c8d0db;
+      border-radius: 5px;
+      font-size: 0.87rem;
+      background: #fafbfc;
+      transition: border-color .2s;
+    }
+    .field select:focus,
+    .field textarea:focus,
+    .field input[type="text"]:focus {
+      outline: none;
+      border-color: #1a3a5c;
+      background: #fff;
+    }
+    .field textarea { resize: vertical; min-height: 80px; }
+
+    .form-actions {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid #dde3ea;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #1a3a5c; color: #fff; flex: 1; }
+    .btn-secondary { background: #e8edf3; color: #333; }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-export { background: #27ae60; color: #fff; }
+
+    /* ── Annotation list (below form) ── */
+    .annotations-section {
+      border-top: 1px solid #dde3ea;
+      padding: 0.75rem 1rem;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .annotations-section h3 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .annotation-item {
+      background: #f7f9fb;
+      border: 1px solid #e0e6ee;
+      border-radius: 5px;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.4rem;
+      font-size: 0.8rem;
+    }
+    .annotation-item .meta { color: #888; margin-bottom: 0.2rem; }
+    .annotation-item .edit-btn {
+      background: none;
+      border: 1px solid #b0bec5;
+      border-radius: 3px;
+      padding: 0.15rem 0.4rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      margin-right: 0.3rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1a3a5c;
+      color: #fff;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-size: 0.87rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>OGAI Annotation Platform</h1>
+  <div class="reviewer-bar">
+    <label for="reviewer-id">Reviewer ID:</label>
+    <input type="text" id="reviewer-id" placeholder="e.g. allan" autocomplete="off" />
+  </div>
+  <button class="btn btn-export" onclick="exportCSV()">⬇ Export CSV</button>
+</header>
+
+<div class="layout">
+
+  <!-- Left: paper list -->
+  <aside class="panel-papers">
+    <h2>Papers</h2>
+    <div class="upload-area">
+      <label>
+        ＋ Upload PDF
+        <input type="file" id="pdf-upload" accept=".pdf" multiple onchange="uploadPDFs(this)" />
+      </label>
+    </div>
+    <ul id="paper-list"></ul>
+  </aside>
+
+  <!-- Center: PDF viewer -->
+  <main class="panel-pdf">
+    <div class="pdf-toolbar">
+      <button onclick="prevPage()">◀ Prev</button>
+      <button onclick="nextPage()">Next ▶</button>
+      <span id="page-info">No document loaded</span>
+      <button onclick="zoomOut()">−</button>
+      <button onclick="zoomIn()">＋</button>
+    </div>
+    <div id="pdf-canvas-container">
+      <p id="pdf-placeholder">Select a paper from the list to begin.</p>
+      <canvas id="pdf-canvas" style="display:none;"></canvas>
+    </div>
+  </main>
+
+  <!-- Right: annotation form -->
+  <aside class="panel-form">
+    <h2>Annotation</h2>
+    <div class="form-body">
+      <div class="field">
+        <label>Paper</label>
+        <input type="text" id="field-paper" readonly placeholder="Select a paper…" />
+      </div>
+      <div class="field">
+        <label>Study Type</label>
+        <select id="field-study-type">
+          <option value="">— select —</option>
+          <option value="RCT">Randomised Controlled Trial (RCT)</option>
+          <option value="Cohort">Cohort Study</option>
+          <option value="Case-Control">Case-Control Study</option>
+          <option value="Cross-Sectional">Cross-Sectional Study</option>
+          <option value="Systematic Review">Systematic Review / Meta-Analysis</option>
+          <option value="Case Report">Case Report / Case Series</option>
+          <option value="Other">Other / Unclear</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Population</label>
+        <textarea id="field-population" placeholder="Describe the study population…"></textarea>
+      </div>
+      <div class="field">
+        <label>Intervention</label>
+        <textarea id="field-intervention" placeholder="Describe the intervention…"></textarea>
+      </div>
+      <div class="field">
+        <label>Comparator</label>
+        <textarea id="field-comparator" placeholder="Describe the comparator / control…"></textarea>
+      </div>
+      <div class="field">
+        <label>Outcome</label>
+        <textarea id="field-outcome" placeholder="Primary and secondary outcomes…"></textarea>
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="field-notes" placeholder="Any additional notes…"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveAnnotation()">💾 Save</button>
+      <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+    </div>
+    <div class="annotations-section">
+      <h3>Saved annotations for this paper</h3>
+      <div id="annotation-list"></div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── PDF.js setup ─────────────────────────────────────────────────────
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  let pdfDoc = null;
+  let currentPage = 1;
+  let scale = 1.2;
+  let activePaper = null;
+  let editingAnnotationId = null;
+
+  // ── Toast ─────────────────────────────────────────────────────────────
+  function showToast(msg, color = '#1a3a5c') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // ── Paper list ────────────────────────────────────────────────────────
+  async function loadPaperList() {
+    const res = await fetch('/api/papers');
+    const data = await res.json();
+    const ul = document.getElementById('paper-list');
+    ul.innerHTML = '';
+    data.papers.forEach(name => {
+      const li = document.createElement('li');
+      li.textContent = name;
+      li.onclick = () => openPaper(name, li);
+      ul.appendChild(li);
+    });
+  }
+
+  async function uploadPDFs(input) {
+    const files = Array.from(input.files);
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/papers/upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json();
+        showToast('Upload failed: ' + (err.detail || res.statusText), '#c0392b');
+        continue;
+      }
+      showToast('Uploaded: ' + file.name, '#27ae60');
+    }
+    input.value = '';
+    await loadPaperList();
+  }
+
+  // ── PDF viewer ────────────────────────────────────────────────────────
+  async function openPaper(name, li) {
+    document.querySelectorAll('#paper-list li').forEach(el => el.classList.remove('active'));
+    li.classList.add('active');
+    activePaper = name;
+    document.getElementById('field-paper').value = name;
+    editingAnnotationId = null;
+    clearFormFields();
+    await loadAnnotations();
+
+    const url = '/api/papers/' + encodeURIComponent(name);
+    pdfDoc = await pdfjsLib.getDocument(url).promise;
+    currentPage = 1;
+    await renderPage(currentPage);
+    document.getElementById('pdf-placeholder').style.display = 'none';
+    document.getElementById('pdf-canvas').style.display = 'block';
+  }
+
+  async function renderPage(num) {
+    if (!pdfDoc) return;
+    const page = await pdfDoc.getPage(num);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    document.getElementById('page-info').textContent =
+      `Page ${currentPage} / ${pdfDoc.numPages}`;
+  }
+
+  async function prevPage() {
+    if (!pdfDoc || currentPage <= 1) return;
+    currentPage--;
+    await renderPage(currentPage);
+  }
+
+  async function nextPage() {
+    if (!pdfDoc || currentPage >= pdfDoc.numPages) return;
+    currentPage++;
+    await renderPage(currentPage);
+  }
+
+  async function zoomIn() { scale = Math.min(scale + 0.2, 3.0); await renderPage(currentPage); }
+  async function zoomOut() { scale = Math.max(scale - 0.2, 0.4); await renderPage(currentPage); }
+
+  // ── Annotations ───────────────────────────────────────────────────────
+  async function loadAnnotations() {
+    if (!activePaper) return;
+    const reviewer = document.getElementById('reviewer-id').value.trim();
+    let url = '/api/annotations?paper_id=' + encodeURIComponent(activePaper);
+    if (reviewer) url += '&reviewer_id=' + encodeURIComponent(reviewer);
+    const res = await fetch(url);
+    const data = await res.json();
+    const container = document.getElementById('annotation-list');
+    container.innerHTML = '';
+    data.annotations.forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'annotation-item';
+      div.innerHTML = `
+        <div class="meta">${a.reviewer_id} — ${a.study_type || '—'} — ${new Date(a.updated_at).toLocaleString()}</div>
+        <div>${a.population ? a.population.slice(0,60) + '…' : ''}</div>
+        <button class="edit-btn" onclick="editAnnotation(${a.id})">✏ Edit</button>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  async function saveAnnotation() {
+    const reviewer = document.getElementById('reviewer-id').value.trim();
+    if (!reviewer) { showToast('Please enter your Reviewer ID first.', '#e67e22'); return; }
+    if (!activePaper) { showToast('Please select a paper first.', '#e67e22'); return; }
+
+    const payload = {
+      reviewer_id:  reviewer,
+      paper_id:     activePaper,
+      study_type:   document.getElementById('field-study-type').value || null,
+      population:   document.getElementById('field-population').value || null,
+      intervention: document.getElementById('field-intervention').value || null,
+      comparator:   document.getElementById('field-comparator').value || null,
+      outcome:      document.getElementById('field-outcome').value || null,
+      notes:        document.getElementById('field-notes').value || null,
+    };
+
+    let res;
+    if (editingAnnotationId) {
+      res = await fetch('/api/annotations/' + editingAnnotationId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch('/api/annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    if (res.ok) {
+      showToast(editingAnnotationId ? 'Annotation updated ✓' : 'Annotation saved ✓', '#27ae60');
+      editingAnnotationId = null;
+      clearFormFields();
+      await loadAnnotations();
+    } else {
+      const err = await res.json();
+      showToast('Error: ' + (err.detail || res.statusText), '#c0392b');
+    }
+  }
+
+  async function editAnnotation(id) {
+    const res = await fetch('/api/annotations?paper_id=' + encodeURIComponent(activePaper));
+    const data = await res.json();
+    const a = data.annotations.find(x => x.id === id);
+    if (!a) return;
+    editingAnnotationId = id;
+    document.getElementById('field-study-type').value   = a.study_type   || '';
+    document.getElementById('field-population').value   = a.population   || '';
+    document.getElementById('field-intervention').value = a.intervention || '';
+    document.getElementById('field-comparator').value   = a.comparator   || '';
+    document.getElementById('field-outcome').value      = a.outcome      || '';
+    document.getElementById('field-notes').value        = a.notes        || '';
+    document.querySelector('.panel-form').scrollTop = 0;
+    showToast('Editing annotation #' + id, '#8e44ad');
+  }
+
+  function clearFormFields() {
+    ['field-study-type', 'field-population', 'field-intervention',
+     'field-comparator', 'field-outcome', 'field-notes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+  }
+
+  function clearForm() {
+    clearFormFields();
+    editingAnnotationId = null;
+  }
+
+  async function exportCSV() {
+    const link = document.createElement('a');
+    link.href = '/api/annotations/export';
+    link.download = 'annotations.csv';
+    link.click();
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────
+  loadPaperList();
+  document.getElementById('reviewer-id').addEventListener('change', loadAnnotations);
+</script>
+</body>
+</html>
