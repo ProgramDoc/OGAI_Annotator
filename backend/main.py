@@ -131,8 +131,10 @@ def init_db() -> None:
         """)
 
         for migration in [
+            "ALTER TABLE papers      ADD COLUMN sha256      TEXT",
             "ALTER TABLE papers      ADD COLUMN user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE",
             "ALTER TABLE papers      ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL",
+            "ALTER TABLE papers      ADD COLUMN created_at TEXT DEFAULT (datetime('now'))",
             "ALTER TABLE projects    ADD COLUMN user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE",
             "ALTER TABLE annotations ADD COLUMN correction_notes          TEXT",
             "ALTER TABLE annotations ADD COLUMN corrections_json          TEXT",
@@ -451,7 +453,7 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
     papers = conn.execute(
-        "SELECT id, filename, sha256, project_id FROM papers WHERE user_id=? ORDER BY created_at DESC",
+        "SELECT id, filename, project_id FROM papers WHERE user_id=? ORDER BY created_at DESC",
         (user["id"],),
     ).fetchall()
     result = []
@@ -462,7 +464,6 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
         result.append({
             "id":           p["id"],
             "filename":     p["filename"],
-            "sha256":       p["sha256"],
             "project_id":   p["project_id"],
             "annotated_by": [r["reviewer_id"] for r in reviewers],
         })
