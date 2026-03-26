@@ -289,6 +289,20 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+/* ── CORRECTION TRACKING ── */
+.field-row input.field-corrected,
+.field-row textarea.field-corrected {
+  border-left: 3px solid #dc2626 !important;
+  background: #fff8f8 !important;
+}
+.correction-summary {
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px;
+  padding: 8px 10px; font-size: 11px; color: #991b1b; margin-bottom: 8px;
+  display: none; line-height: 1.6;
+}
+.correction-count { font-weight: 700; }
+.action-btn-active { outline: 2px solid #1e293b !important; font-weight: 900 !important; }
+
 /* ── AI AUTO-FILL ── */
 .autofill-panel {
   background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px;
@@ -392,6 +406,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
         <select id="f-major_category" onchange="onMajorCatChange()">
           <option value="">— select —</option>
           <option>Primary Studies</option>
+          <option>Observational Studies</option>
           <option>Evidence Synthesis</option>
           <option>Guidance / Consensus</option>
           <option>Economic &amp; Decision Models</option>
@@ -485,6 +500,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
     <!-- Annotation notes -->
     <div class="form-section">
       <div class="form-section-header">Annotation Notes</div>
+      <div id="correction-summary" class="correction-summary"></div>
       <div class="field-row">
         <div class="field-label">Correction / Flag Notes</div>
         <textarea id="f-correction_notes" placeholder="Explain why the pipeline classification is wrong, or what makes this case ambiguous..."></textarea>
@@ -508,24 +524,31 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SUBCATS = {
-  "Primary Studies": ["Randomized Controlled","Non-Randomized Controlled","Non-Randomized Uncontrolled","Quasi-Experimental","Descriptive Observational","Analytical Observational","Diagnostic / Prognostic","Qualitative & Mixed Methods"],
-  "Evidence Synthesis": ["Systematic Review / Meta-Analysis"],
-  "Guidance / Consensus": ["Guideline / Consensus"],
+  // Experimental branch — sub-groups map directly to study type groups
+  "Primary Studies":       ["Randomized Controlled","Non-Randomized Controlled","Non-Randomized Uncontrolled","Quasi-Experimental","Qualitative & Mixed Methods"],
+  // Observational branch — separated per taxonomy (c:"major" node)
+  "Observational Studies": ["Descriptive","Analytical","Diagnostic / Prognostic"],
+  "Evidence Synthesis":    ["Reviews"],
+  "Guidance / Consensus":  ["Guidelines & Consensus"],
   "Economic & Decision Models": ["Economic Evaluation"],
 };
 
 const STUDY_TYPES = {
-  "Randomized Controlled":        ["Randomized Controlled Trial","Cluster Randomized Trial","Stepped-Wedge Cluster RCT","Crossover Trial"],
-  "Non-Randomized Controlled":    ["Non-Randomized Trial"],
-  "Non-Randomized Uncontrolled":  ["Single-Arm Trial","Dose-Escalation Study"],
-  "Quasi-Experimental":           ["Interrupted Time Series","Uncontrolled Before-After","Difference-in-Differences","Regression Discontinuity"],
-  "Descriptive Observational":    ["Case Report / Series","Cross-Sectional (Descriptive)","Ecological Study"],
-  "Analytical Observational":     ["Case-Control","Cohort Study","Cross-Sectional (Analytical)","Self-Controlled Case Series","Case-Crossover","Mendelian Randomization"],
-  "Diagnostic / Prognostic":      ["Diagnostic Accuracy","Prognostic Factor Study","Prediction Model Study"],
-  "Qualitative & Mixed Methods":  ["Qualitative Research","Mixed Methods"],
-  "Systematic Review / Meta-Analysis": ["SR without Meta-Analysis","SR with Meta-Analysis","Umbrella Review","Network Meta-Analysis","Scoping Review","Narrative Review"],
-  "Guideline / Consensus":        ["Guideline / Consensus"],
-  "Economic Evaluation":          ["Economic Evaluation"],
+  // Primary Studies (Experimental)
+  "Randomized Controlled":       ["Randomized Controlled Trial","Cluster Randomized Trial","Stepped-Wedge Cluster RCT","Crossover Trial"],
+  "Non-Randomized Controlled":   ["Non-Randomized Trial"],
+  "Non-Randomized Uncontrolled": ["Single-Arm Trial","Dose-Escalation Study"],
+  "Quasi-Experimental":          ["Interrupted Time Series","Uncontrolled Before-After","Difference-in-Differences","Regression Discontinuity"],
+  "Qualitative & Mixed Methods": ["Qualitative Research","Mixed Methods"],
+  // Observational Studies
+  "Descriptive":                 ["Case Report / Series","Cross-Sectional (Descriptive)","Ecological Study"],
+  "Analytical":                  ["Case-Control","Cohort Study","Cross-Sectional (Analytical)","Self-Controlled Case Series","Case-Crossover","Mendelian Randomization"],
+  "Diagnostic / Prognostic":     ["Diagnostic Accuracy","Prognostic Factor Study","Prediction Model Study"],
+  // Evidence Synthesis
+  "Reviews":                     ["SR without Meta-Analysis","SR with Meta-Analysis","Umbrella Review","Network Meta-Analysis","Scoping Review","Narrative Review"],
+  // Guidance & Economic
+  "Guidelines & Consensus":      ["Guideline / Consensus"],
+  "Economic Evaluation":         ["Economic Evaluation"],
 };
 
 const ROB_MAP = {
@@ -781,6 +804,18 @@ TYPE_FIELDS["Mendelian Randomization"] = [
   {id:"pleiotropy_tests", label:"Pleiotropy tests (Egger/PRESSO/WM)", type:"textarea"},
   {id:"exclusion_restriction", label:"Exclusion restriction argument", type:"textarea"},
 ];
+TYPE_FIELDS["Case-Crossover"] = [
+  {id:"case_definition_ccx",    label:"Case definition",                   type:"textarea"},
+  {id:"exposure_definition_ccx",label:"Exposure definition",               type:"textarea"},
+  {id:"hazard_period",          label:"Hazard period definition & length",  type:"text"},
+  {id:"control_period",         label:"Control period definition & length", type:"text"},
+  {id:"induction_period",       label:"Induction / washout period",         type:"text"},
+  {id:"temporal_direction",     label:"Bidirectional vs unidirectional",    type:"text"},
+  {id:"exposure_variability",   label:"Exposure variability rationale",     type:"textarea"},
+  {id:"conditional_logistic",   label:"Conditional logistic regression used",type:"text"},
+  {id:"self_selection_bias",    label:"Self-selection / event-driven bias assessment", type:"textarea"},
+];
+
 TYPE_FIELDS["Economic Evaluation"] = [
   {id:"evaluation_type", label:"Evaluation type (CEA/CUA/CBA/BIA)", type:"text"},
   {id:"perspective", label:"Perspective (societal/payer/etc)", type:"text"},
@@ -852,6 +887,7 @@ let activeFieldBtn = null;      // button element
 let pendingSelection = null;    // {text, page, x0,y0,x1,y1} from current text selection
 let spans = [];                 // [{field_name, page, text, x0,y0,x1,y1}]
 let reviewerAction = "Confirm";
+let pipelinePredictions = {};   // baseline values (from AI fill or last saved annotation)
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -904,6 +940,15 @@ function buildSection(fields, container) {
 
 buildSection(UNIVERSAL_FIELDS, document.getElementById('universal-fields'));
 buildSection(MODIFIER_FIELDS, document.getElementById('modifier-fields'));
+
+// Live correction highlight updates whenever any form field changes
+document.addEventListener('input', e => {
+  if (e.target.id && e.target.id.startsWith('f-') &&
+      (reviewerAction === 'Correct' || reviewerAction === 'Flag')) {
+    highlightCorrections();
+    updateCorrectionSummary();
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TAXONOMY DROPDOWNS
@@ -1265,11 +1310,31 @@ function getFormData() {
     data[key] = el.value || '';
   });
   data.reviewer_action = reviewerAction;
+
+  // Always persist the baseline so it survives page reload
+  data.pipeline_predictions_json = JSON.stringify(pipelinePredictions);
+
+  // Compute structured diff for Correct / Flag actions
+  const corrections = {};
+  Object.entries(pipelinePredictions).forEach(([k, baseline]) => {
+    const el = document.getElementById('f-' + k);
+    if (!el) return;
+    const current = el.value || '';
+    if (current !== baseline) {
+      corrections[k] = { from: baseline, to: current };
+    }
+  });
+  data.corrections_json = JSON.stringify(corrections);
+
   return data;
 }
 
 function setFormData(data) {
   if (!data) return;
+  // Restore baseline predictions so corrections can be recomputed after page reload
+  if (data.pipeline_predictions_json) {
+    try { pipelinePredictions = JSON.parse(data.pipeline_predictions_json); } catch(e) {}
+  }
   // Set major/sub/type first (triggers cascades)
   if (data.major_category) {
     const el = document.getElementById('f-major_category');
@@ -1293,17 +1358,53 @@ function setFormData(data) {
       if (el && v !== undefined) el.value = v;
     });
     if (data.reviewer_action) setAction(data.reviewer_action, false);
+    // Restore correction highlights if action was Correct/Flag
+    if (data.reviewer_action === 'Correct' || data.reviewer_action === 'Flag') {
+      highlightCorrections();
+    }
   }, 50);
 }
 
 function setAction(action, visual=true) {
   reviewerAction = action;
-  if (!visual) return;
-  ['Confirm','Correct','Flag'].forEach(a => {
-    const btn = document.getElementById('btn-' + a.toLowerCase());
-    if (btn) btn.style.fontWeight = (a===action) ? '900' : '700';
-    if (btn) btn.style.outline = (a===action) ? '2px solid #1e293b' : 'none';
+  if (visual) {
+    ['Confirm','Correct','Flag'].forEach(a => {
+      const btn = document.getElementById('btn-' + a.toLowerCase());
+      if (btn) btn.classList.toggle('action-btn-active', a === action);
+    });
+  }
+  highlightCorrections();
+  updateCorrectionSummary();
+}
+
+function highlightCorrections() {
+  // Clear all correction markers first
+  document.querySelectorAll('.field-corrected').forEach(el => el.classList.remove('field-corrected'));
+  if (reviewerAction !== 'Correct' && reviewerAction !== 'Flag') return;
+  if (!Object.keys(pipelinePredictions).length) return;
+  Object.entries(pipelinePredictions).forEach(([k, baseline]) => {
+    const el = document.getElementById('f-' + k);
+    if (!el || el.tagName === 'SELECT') return;
+    if ((el.value || '') !== baseline) el.classList.add('field-corrected');
   });
+}
+
+function updateCorrectionSummary() {
+  const el = document.getElementById('correction-summary');
+  if (!el) return;
+  if ((reviewerAction !== 'Correct' && reviewerAction !== 'Flag') || !Object.keys(pipelinePredictions).length) {
+    el.style.display = 'none'; return;
+  }
+  const changed = Object.entries(pipelinePredictions).filter(([k]) => {
+    const fe = document.getElementById('f-' + k);
+    return fe && (fe.value || '') !== pipelinePredictions[k];
+  });
+  if (!changed.length) {
+    el.style.display = 'none'; return;
+  }
+  el.style.display = 'block';
+  el.innerHTML = `<span class="correction-count">${changed.length} field${changed.length>1?'s':''} corrected</span> from AI prediction: ` +
+    changed.map(([k]) => `<em>${k}</em>`).join(', ');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1451,9 +1552,21 @@ async function autoFillFields() {
       filled++;
     });
 
-    // Remove marker when user edits the field
+    // Store as baseline for corrections tracking
+    pipelinePredictions = {};
+    Object.entries(data).forEach(([k, v]) => {
+      if (v && typeof v === 'string') pipelinePredictions[k] = v;
+    });
+
+    // Remove amber marker when user edits; update correction highlights if in Correct mode
     document.querySelectorAll('.ai-prefilled').forEach(el => {
-      el.addEventListener('input', () => el.classList.remove('ai-prefilled'), { once: true });
+      el.addEventListener('input', () => {
+        el.classList.remove('ai-prefilled');
+        if (reviewerAction === 'Correct' || reviewerAction === 'Flag') {
+          highlightCorrections();
+          updateCorrectionSummary();
+        }
+      }, { once: true });
     });
 
     status.style.color = '#16a34a';

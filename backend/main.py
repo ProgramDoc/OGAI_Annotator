@@ -393,6 +393,10 @@ FLAT_COLS = [
     "industry_sponsored", "data_source_type", "database_name",
     "adaptive_design", "pragmatic_vs_explanatory", "trial_framework",
     "target_trial_emulation", "pilot_or_feasibility",
+    # Annotation quality & corrections
+    "correction_notes",
+    "corrections_json",          # structured diff {field: {from, to}} for Correct/Flag actions
+    "pipeline_predictions_json", # baseline AI/pipeline values at time of fill
 ]
 
 @app.get("/api/export/csv")
