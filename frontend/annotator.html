@@ -390,7 +390,9 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 <div id="topbar">
   <div class="brand"><span>OGAI</span> Annotation Platform</div>
   <div class="tb-sep"></div>
-  <input type="text" id="reviewer-input" placeholder="Reviewer ID (e.g. tom)" autocomplete="off">
+  <span id="user-display" style="font-size:11px;color:rgba(255,255,255,.55);font-family:'IBM Plex Mono',monospace;"></span>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" onclick="logout()" style="color:#f87171;border-color:rgba(248,113,113,.3);">Sign out</button>
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="exportCSV()">⬇ Export CSV</button>
   <button class="tb-btn primary" onclick="saveAnnotation()" id="save-btn">Save</button>
@@ -1837,15 +1839,15 @@ function handleDrop(e) {
 }
 
 async function loadExistingAnnotation() {
-  const reviewerId = document.getElementById('reviewer-input').value.trim();
-  if (!reviewerId || !currentPaperId) return;
+  if (!currentPaperId) return;
   try {
-    const res = await fetch(`/api/papers/${currentPaperId}/annotations?reviewer_id=${reviewerId}`);
+    const res = await fetch(`/api/papers/${currentPaperId}/annotations`);
+    if (res.status === 401) { window.location.href = '/login'; return; }
     const body = await res.json();
     if (body.annotations.length) {
       const ann = body.annotations[0];
       setFormData(ann.data);
-      spans = body.spans.filter(s => s.reviewer_id === reviewerId);
+      spans = body.spans;
       renderSpanTags();
       setTimeout(renderHighlights, 500);
     }
@@ -1853,20 +1855,18 @@ async function loadExistingAnnotation() {
 }
 
 async function saveAnnotation() {
-  const reviewerId = document.getElementById('reviewer-input').value.trim();
-  if (!reviewerId) { alert('Enter your Reviewer ID in the top bar first.'); return; }
   if (!currentPaperId) { alert('Select a paper first.'); return; }
 
   const payload = {
-    reviewer_id: reviewerId,
     data: getFormData(),
     spans: spans,
   };
   const res = await fetch(`/api/papers/${currentPaperId}/annotations`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  if (res.status === 401) { window.location.href = '/login'; return; }
   const result = await res.json();
   document.getElementById('save-status').textContent =
     `saved ${result.timestamp?.slice(11,19) || '✓'}`;
@@ -1877,6 +1877,12 @@ async function exportCSV() {
   window.open('/api/export/csv', '_blank');
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 
 // Wire file-input here so this.files is snapshotted synchronously before any async gap
@@ -1884,7 +1890,20 @@ document.getElementById('file-input').addEventListener('change', function () {
   uploadFiles(this.files);
 });
 
-loadPapersAndProjects();
+// Verify session and display current user
+(async () => {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) { window.location.href = '/login'; return; }
+    const user = await res.json();
+    const disp = document.getElementById('user-display');
+    if (disp) disp.textContent = user.display_name + ' (' + user.email + ')';
+  } catch(e) {
+    window.location.href = '/login';
+    return;
+  }
+  loadPapersAndProjects();
+})();
 </script>
 </body>
 </html>
