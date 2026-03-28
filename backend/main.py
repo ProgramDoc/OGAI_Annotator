@@ -150,6 +150,12 @@ def init_db() -> None:
             except sqlite3.OperationalError:
                 pass
 
+        # Backfill NULL ids for legacy TEXT PRIMARY KEY schema
+        try:
+            conn.execute("UPDATE papers SET id=CAST(rowid AS TEXT) WHERE id IS NULL OR id=''")
+        except Exception:
+            pass
+
         conn.commit()
     conn.close()
     _ensure_admin_user()
@@ -458,18 +464,16 @@ def list_papers(ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
     papers = conn.execute(
-        "SELECT id, filename, project_id FROM papers WHERE user_id=? AND id IS NOT NULL ORDER BY id DESC",
+        "SELECT rowid as rid, filename, project_id FROM papers WHERE user_id=? ORDER BY rowid DESC",
         (user["id"],),
     ).fetchall()
     result = []
     for p in papers:
-        if not p["id"]:          # skip any null-id rows
-            continue
         reviewers = conn.execute(
-            "SELECT reviewer_id FROM annotations WHERE paper_id=?", (p["id"],)
+            "SELECT reviewer_id FROM annotations WHERE paper_id=?", (p["rid"],)
         ).fetchall()
         result.append({
-            "id":           p["id"],
+            "id":           p["rid"],
             "filename":     p["filename"],
             "project_id":   p["project_id"],
             "annotated_by": [r["reviewer_id"] for r in reviewers],
@@ -547,53 +551,38 @@ async def upload_paper(file: UploadFile = File(...), ogai_session: str | None = 
 
         cur = conn.execute(insert_sql, insert_vals)
         conn.commit()
-        paper_id = cur.lastrowid if cur.lastrowid else None
-        logger.error(f"upload: INSERT lastrowid={paper_id}")
+        rowid = cur.lastrowid
+        logger.error(f"upload: INSERT rowid={rowid}")
 
-        # ── Step 4: unconditional UPDATE to stamp ownership ──────────────
-        if "user_id" in cols and "sha256" in cols:
-            conn.execute("UPDATE papers SET user_id=? WHERE sha256=?", (uid, sha))
-        if "disk_filename" in cols and "sha256" in cols:
-            conn.execute("UPDATE papers SET disk_filename=? WHERE sha256=?", (disk_fn, sha))
-        if "sha256" in cols:
-            conn.execute("UPDATE papers SET filename=? WHERE sha256=?", (file.filename, sha))
+        # ── Step 4: backfill id=rowid (legacy TEXT PRIMARY KEY schema) ───
+        try:
+            conn.execute(
+                "UPDATE papers SET id=CAST(rowid AS TEXT) WHERE rowid=? AND (id IS NULL OR id='')",
+                (rowid,)
+            )
+        except Exception as e:
+            logger.error(f"upload: id backfill (ok to ignore): {e}")
+        if "user_id" in cols:
+            conn.execute("UPDATE papers SET user_id=? WHERE rowid=?", (uid, rowid))
+        if "disk_filename" in cols:
+            conn.execute("UPDATE papers SET disk_filename=? WHERE rowid=?", (disk_fn, rowid))
+        conn.execute("UPDATE papers SET filename=? WHERE rowid=?", (file.filename, rowid))
         conn.commit()
 
-        # ── Step 5: resolve final paper_id ───────────────────────────────
-        # lastrowid is 0 when INSERT OR IGNORE fires but the row already existed.
-        # In that case SELECT to get the pre-existing row's id.
-        if not paper_id and "sha256" in cols:
-            row = conn.execute("SELECT id FROM papers WHERE sha256=?", (sha,)).fetchone()
-            if row:
-                paper_id = row["id"]
-                logger.error(f"upload: resolved existing id={paper_id} via SELECT")
+        # ── Step 5: SELECT by rowid — always works regardless of id type ─
+        sel_cols = ["filename"]
+        if "project_id" in cols: sel_cols.append("project_id")
+        row = conn.execute(
+            f"SELECT {','.join(sel_cols)}, rowid FROM papers WHERE rowid=?", (rowid,)
+        ).fetchone()
 
-        if not paper_id:
-            # Last resort: highest id row with this filename
-            row = conn.execute(
-                "SELECT id FROM papers WHERE filename=? ORDER BY id DESC LIMIT 1",
-                (file.filename,)
-            ).fetchone()
-            if row:
-                paper_id = row["id"]
-                logger.error(f"upload: resolved via filename fallback id={paper_id}")
-
-        proj_id = None
-        if paper_id and "project_id" in cols:
-            row = conn.execute("SELECT project_id FROM papers WHERE id=?", (paper_id,)).fetchone()
-            if row:
-                proj_id = row["project_id"]
-
-        if not paper_id:
+        if row is None:
             raise HTTPException(status_code=500,
-                detail=f"Upload failed: could not resolve paper id (sha={sha[:8]})")
+                detail=f"Upload failed: rowid={rowid} not found after insert")
 
-        logger.error(f"upload: success id={paper_id}")
-        return {
-            "id":         paper_id,
-            "filename":   file.filename,
-            "project_id": proj_id,
-        }
+        proj_id = row["project_id"] if "project_id" in cols else None
+        logger.error(f"upload: success rowid={rowid}")
+        return {"id": rowid, "filename": file.filename, "project_id": proj_id}
 
     except HTTPException:
         raise
@@ -677,7 +666,7 @@ def delete_paper(paper_id: int, ogai_session: str | None = Cookie(default=None))
     disk_fn = row["disk_filename"]
     conn.execute("DELETE FROM spans       WHERE paper_id=?", (paper_id,))
     conn.execute("DELETE FROM annotations WHERE paper_id=?", (paper_id,))
-    conn.execute("DELETE FROM papers      WHERE id=?",       (paper_id,))
+    conn.execute("DELETE FROM papers      WHERE rowid=?",    (paper_id,))
     conn.commit()
     conn.close()
     candidates = []
@@ -696,11 +685,11 @@ def delete_paper(paper_id: int, ogai_session: str | None = Cookie(default=None))
 def assign_paper(paper_id: int, body: PaperAssign, ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
-    row  = conn.execute("SELECT user_id FROM papers WHERE id=?", (paper_id,)).fetchone()
+    row  = conn.execute("SELECT user_id FROM papers WHERE rowid=?", (paper_id,)).fetchone()
     if not row or (row["user_id"] != user["id"] and user["role"] != "admin"):
         conn.close()
         raise HTTPException(status_code=403, detail="Access denied")
-    conn.execute("UPDATE papers SET project_id=? WHERE id=?", (body.project_id, paper_id))
+    conn.execute("UPDATE papers SET project_id=? WHERE rowid=?", (body.project_id, paper_id))
     conn.commit()
     conn.close()
     return {"paper_id": paper_id, "project_id": body.project_id}
@@ -893,7 +882,7 @@ def _call_anthropic(pdf_bytes: bytes, prompt: str) -> dict:
 async def prefill_fields(paper_id: int, body: PrefillRequest, ogai_session: str | None = Cookie(default=None)):
     user = require_user(ogai_session)
     conn = get_db()
-    row  = conn.execute("SELECT sha256, user_id FROM papers WHERE id=?", (paper_id,)).fetchone()
+    row  = conn.execute("SELECT sha256, user_id FROM papers WHERE rowid=?", (paper_id,)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Paper not found")
