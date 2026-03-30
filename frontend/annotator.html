@@ -1438,31 +1438,72 @@ function scrollToSpanInPdf(span) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AUTO-SAVE
+// PERSISTENCE — sessionStorage (immediate) + backend (durable)
 // ═══════════════════════════════════════════════════════════════════════════
-let _autoSaveTimer = null;
-let _autoSaving    = false;
+//
+// Two-layer strategy:
+//   Layer 1 — sessionStorage: synchronous, instant, never fails on network.
+//             Written on EVERY form change and every annotation action.
+//             Key: `ogai_paper_${paperId}`
+//   Layer 2 — Backend DB: durable across sessions.
+//             Written debounced (1.5 s) and force-written on PDF switch.
+//
+// On load: sessionStorage is checked first. If it has data it is used
+// immediately (no round-trip). Backend fetch still runs and updates the
+// session cache if the DB has newer/more complete data (e.g. from another
+// device or a previous session).
 
-// Capture a complete snapshot of the current paper state from the DOM.
-// Must be called BEFORE any reset or context switch.
+let _autoSaveTimer = null;
+let _backendSaving  = false;
+
+// ── sessionStorage helpers ──────────────────────────────────────────────────
+
+function ssKey(paperId) {
+  return `ogai_paper_${paperId}`;
+}
+
+// Write current DOM state to sessionStorage — synchronous, never fails.
+function persistToSession(paperId) {
+  if (!paperId) return;
+  try {
+    const snapshot = {
+      ts:               Date.now(),
+      formData:         getFormData(),
+      spans:            JSON.parse(JSON.stringify(spans)),
+      fieldAnnotations: JSON.parse(JSON.stringify(fieldAnnotations)),
+    };
+    sessionStorage.setItem(ssKey(paperId), JSON.stringify(snapshot));
+  } catch(e) {
+    console.warn('sessionStorage write failed:', e);
+  }
+}
+
+// Read from sessionStorage — returns null if nothing stored.
+function loadFromSession(paperId) {
+  try {
+    const raw = sessionStorage.getItem(ssKey(paperId));
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── Backend save (durable) ──────────────────────────────────────────────────
+
+// Captures a complete state snapshot from the DOM.
 function captureState(paperId) {
-  const formData = getFormData();
-  // getFormData() already embeds pipeline_predictions_json from the live
-  // pipelinePredictions object, so no extra override needed.
   return {
     paperId,
-    formData,
+    formData:         getFormData(),
     spans:            JSON.parse(JSON.stringify(spans)),
     fieldAnnotations: JSON.parse(JSON.stringify(fieldAnnotations)),
   };
 }
 
-// Write a captured state snapshot to the backend.
-// force=true bypasses the _autoSaving guard (used for switch-away saves).
-async function autoSave(snapshot, force = false) {
+async function saveToBackend(snapshot, force = false) {
   if (!snapshot || !snapshot.paperId) return;
-  if (_autoSaving && !force) return;   // background save already in flight — skip
-  _autoSaving = true;
+  if (_backendSaving && !force) return;
+  _backendSaving = true;
 
   const statusEl = document.getElementById('save-status');
   const prevText = statusEl ? statusEl.textContent : '';
@@ -1482,40 +1523,40 @@ async function autoSave(snapshot, force = false) {
     if (res.status === 401) { window.location.href = '/login'; return; }
     if (res.ok) {
       const result = await res.json();
-      // Only update the status bar if we're still on this paper
-      if (currentPaperId === snapshot.paperId && statusEl) {
-        statusEl.textContent = `auto-saved ${result.timestamp?.slice(11,19) || '✓'}`;
-      }
+      if (statusEl) statusEl.textContent = `saved ${result.timestamp?.slice(11,19) || '✓'}`;
     } else {
-      if (currentPaperId === snapshot.paperId && statusEl) {
-        statusEl.textContent = prevText;
-      }
-      console.warn('Auto-save HTTP error:', res.status);
+      if (statusEl) statusEl.textContent = '⚠ save failed — work is in session cache';
+      console.warn('Backend save error:', res.status);
     }
   } catch(e) {
-    if (currentPaperId === snapshot.paperId && statusEl) {
-      statusEl.textContent = prevText;
-    }
-    console.warn('Auto-save failed:', e);
+    if (statusEl) statusEl.textContent = '⚠ offline — work is in session cache';
+    console.warn('Backend save network error:', e);
   } finally {
-    _autoSaving = false;
+    _backendSaving = false;
   }
 }
 
-// Debounced auto-save — fires 3 s after the last form change.
-// Snapshots state immediately (at schedule time) so the closure is stable.
+// ── Combined: write session immediately, queue backend ──────────────────────
+
 function scheduleAutoSave() {
   if (!currentPaperId) return;
-  clearTimeout(_autoSaveTimer);
+
+  // Layer 1: instant sessionStorage write — synchronous, zero latency
+  persistToSession(currentPaperId);
+
+  // Update status bar
   const statusEl = document.getElementById('save-status');
-  if (statusEl && !statusEl.textContent.includes('saving')) {
-    statusEl.textContent = 'unsaved changes…';
+  if (statusEl && !statusEl.textContent.includes('saving') && !statusEl.textContent.includes('saved')) {
+    statusEl.textContent = 'cached…';
   }
+
+  // Layer 2: debounced backend write — 1.5 s after last change
+  clearTimeout(_autoSaveTimer);
   const snapshot = captureState(currentPaperId);
-  _autoSaveTimer = setTimeout(() => autoSave(snapshot), 3000);
+  _autoSaveTimer = setTimeout(() => saveToBackend(snapshot), 1500);
 }
 
-// Wire debounced auto-save to the form panel via event delegation
+// Wire to form panel via event delegation
 document.getElementById('form-scroll').addEventListener('input',  scheduleAutoSave);
 document.getElementById('form-scroll').addEventListener('change', scheduleAutoSave);
 
@@ -1523,15 +1564,14 @@ document.getElementById('form-scroll').addEventListener('change', scheduleAutoSa
 // PDF RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadPdf(paperId, filename) {
-  // ── Step 1: Capture + force-save the CURRENT paper before switching ────────
-  // captureState() reads the live DOM — must happen before ANY reset.
-  // force=true bypasses _autoSaving so an in-flight background save never
-  // blocks this write. clearTimeout ensures the debounce doesn't fire again
-  // after the switch.
+  // ── Step 1: Persist current paper BEFORE any state change ─────────────────
   if (currentPaperId && currentPaperId !== paperId) {
     clearTimeout(_autoSaveTimer);
-    const snapshot = captureState(currentPaperId);   // snapshot DOM while still populated
-    await autoSave(snapshot, true);                  // force=true — always writes
+    // Layer 1: instant session write (synchronous — captures DOM while intact)
+    persistToSession(currentPaperId);
+    // Layer 2: force backend write (awaited — guarantees DB is updated)
+    const snapshot = captureState(currentPaperId);
+    await saveToBackend(snapshot, true);
   }
 
   // ── Step 2: Switch context ────────────────────────────────────────────────
@@ -1541,13 +1581,12 @@ async function loadPdf(paperId, filename) {
   pipelinePredictions = {};
   renderSpanTags();
 
-  // ── Step 3: Reset all form fields and annotation state ────────────────────
+  // ── Step 3: Reset form ────────────────────────────────────────────────────
   resetForm();
   renderSidebar();
+  document.getElementById('save-status').textContent = `loading…`;
 
-  document.getElementById('save-status').textContent = `loading ${filename}…`;
-
-  // ── Step 4: Load the PDF and restore saved annotation ─────────────────────
+  // ── Step 4: Load PDF ──────────────────────────────────────────────────────
   const url = `/api/papers/${paperId}/pdf`;
   try {
     pdfDoc = await pdfjsLib.getDocument(url).promise;
@@ -2121,7 +2160,10 @@ async function prefillFromPDF() {
     btn.textContent = 'Re-fill from PDF';
     hint.textContent = `${filled} fields extracted`;
     hint.style.display = 'block';
-    scheduleAutoSave();   // persist AI extraction immediately
+    // Persist AI extraction immediately — don't rely on debounce
+    persistToSession(currentPaperId);
+    const snapshot = captureState(currentPaperId);
+    saveToBackend(snapshot, true);   // fire and forget — no await needed here
   } catch(e) {
     alert('Auto-fill error: ' + e.message);
     btn.textContent = 'Auto-fill from PDF';
@@ -2435,27 +2477,67 @@ function handleDrop(e) {
 
 async function loadExistingAnnotation() {
   if (!currentPaperId) return;
+
+  // ── Layer 1: sessionStorage (instant, no round-trip) ──────────────────────
+  const cached = loadFromSession(currentPaperId);
+
+  // ── Layer 2: backend DB ───────────────────────────────────────────────────
+  let backendData = null;
+  let backendSpans = [];
   try {
     const res = await fetch(`/api/papers/${currentPaperId}/annotations`);
     if (res.status === 401) { window.location.href = '/login'; return; }
-    const body = await res.json();
-    if (body.annotations.length) {
-      const ann = body.annotations[0];
-      setFormData(ann.data);
-      spans = body.spans;
-      renderSpanTags();
-      setTimeout(renderHighlights, 500);
+    if (res.ok) {
+      const body = await res.json();
+      if (body.annotations && body.annotations.length) {
+        backendData  = body.annotations[0].data;
+        backendSpans = body.spans || [];
+      }
     }
-  } catch(e) { console.warn('No existing annotation:', e); }
+  } catch(e) {
+    console.warn('Backend annotation fetch failed:', e);
+  }
+
+  // ── Choose source: prefer sessionStorage if it exists ─────────────────────
+  // sessionStorage is written on every keystroke / AI fill / action, so it
+  // is always at least as recent as the last backend save.
+  if (cached) {
+    // Restore from session cache
+    setFormData(cached.formData);
+    spans = cached.spans || [];
+    fieldAnnotations = cached.fieldAnnotations || {};
+    renderSpanTags();
+    setTimeout(renderHighlights, 400);
+    document.getElementById('save-status').textContent = 'restored from cache';
+  } else if (backendData) {
+    // No session cache — fall back to DB
+    setFormData(backendData);
+    spans = backendSpans;
+    renderSpanTags();
+    setTimeout(renderHighlights, 400);
+    document.getElementById('save-status').textContent = 'loaded from DB';
+    // Populate session cache so next switch is instant
+    setTimeout(() => persistToSession(currentPaperId), 100);
+  } else {
+    document.getElementById('save-status').textContent = currentFilename;
+  }
 }
 
 async function saveAnnotation() {
   if (!currentPaperId) { alert('Select a paper first.'); return; }
   clearTimeout(_autoSaveTimer);
+  persistToSession(currentPaperId);                   // layer 1: instant
   const snapshot = captureState(currentPaperId);
-  await autoSave(snapshot, true);   // force=true — manual save always writes
+  await saveToBackend(snapshot, true);                // layer 2: force
   loadPapersAndProjects();
 }
+
+// ── Persist to session on page unload (tab close / refresh) ───────────────
+window.addEventListener('beforeunload', () => {
+  if (currentPaperId) {
+    persistToSession(currentPaperId);
+  }
+});
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 async function logout() {
