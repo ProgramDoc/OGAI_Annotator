@@ -1096,19 +1096,19 @@ function buildField(f) {
   confirmBtn.className = 'ann-btn confirm';
   confirmBtn.title = 'Confirm: the AI value is correct as-is';
   confirmBtn.textContent = '✓ Confirm';
-  confirmBtn.onclick = (e) => { e.stopPropagation(); setFieldAnnotation(f.id, 'confirmed'); };
+  confirmBtn.onclick = (e) => { e.stopPropagation(); setFieldAnnotation(f.id, 'confirmed'); scheduleAutoSave(); };
 
   const correctBtn = document.createElement('button');
   correctBtn.className = 'ann-btn correct';
   correctBtn.title = 'Correct: the AI value is wrong — enter the correct value below';
   correctBtn.textContent = '✎ Correct';
-  correctBtn.onclick = (e) => { e.stopPropagation(); openCorrectionArea(f.id); };
+  correctBtn.onclick = (e) => { e.stopPropagation(); openCorrectionArea(f.id); scheduleAutoSave(); };
 
   const flagBtn = document.createElement('button');
   flagBtn.className = 'ann-btn flag-btn';
   flagBtn.title = 'Flag: leave a note about this field (can combine with Confirm or Correct)';
   flagBtn.textContent = '⚑';
-  flagBtn.onclick = (e) => { e.stopPropagation(); toggleFlagArea(f.id); };
+  flagBtn.onclick = (e) => { e.stopPropagation(); toggleFlagArea(f.id); scheduleAutoSave(); };
 
   annBtns.appendChild(confirmBtn);
   annBtns.appendChild(correctBtn);
@@ -1388,6 +1388,7 @@ function linkSelection() {
     activeFieldBtn.classList.add('linked');
   }
   clearActiveField();
+  scheduleAutoSave();
 }
 
 function removeSpan(fieldName) {
@@ -1396,6 +1397,7 @@ function removeSpan(fieldName) {
   renderHighlights();
   const btn = document.querySelector(`.field-anchor-btn[data-field="${fieldName}"]`);
   if (btn) { btn.textContent = 'anchor'; btn.classList.remove('linked','active'); }
+  scheduleAutoSave();
 }
 
 function renderSpanTags() {
@@ -1436,32 +1438,102 @@ function scrollToSpanInPdf(span) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AUTO-SAVE
+// ═══════════════════════════════════════════════════════════════════════════
+let _autoSaveTimer = null;
+let _autoSaving    = false;
+
+// Silent save — called on switch and by debounce; never alerts on failure
+async function autoSave(paperId, spansSnap, predictionsSnap, annotationsSnap) {
+  if (!paperId || _autoSaving) return;
+  _autoSaving = true;
+  const statusEl = document.getElementById('save-status');
+  const prevText = statusEl ? statusEl.textContent : '';
+  if (statusEl) statusEl.textContent = 'saving…';
+  try {
+    const payload = {
+      data:             { ...getFormData(), pipeline_predictions_json: JSON.stringify(predictionsSnap) },
+      spans:            spansSnap,
+      field_annotations: annotationsSnap,
+    };
+    const res = await fetch(`/api/papers/${paperId}/annotations`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (res.status === 401) { window.location.href = '/login'; return; }
+    if (res.ok) {
+      const result = await res.json();
+      if (statusEl) statusEl.textContent = `auto-saved ${result.timestamp?.slice(11,19) || '✓'}`;
+    } else {
+      if (statusEl) statusEl.textContent = prevText;
+    }
+  } catch(e) {
+    if (statusEl) statusEl.textContent = prevText;
+    console.warn('Auto-save failed:', e);
+  } finally {
+    _autoSaving = false;
+  }
+}
+
+// Debounced auto-save — fires 3 s after the last form change
+function scheduleAutoSave() {
+  if (!currentPaperId) return;
+  clearTimeout(_autoSaveTimer);
+  const statusEl = document.getElementById('save-status');
+  if (statusEl && !statusEl.textContent.includes('saving')) {
+    statusEl.textContent = 'unsaved changes…';
+  }
+  // Snapshot mutable state now so the closure captures the right version
+  const pid   = currentPaperId;
+  const sSnap = JSON.parse(JSON.stringify(spans));
+  const pSnap = JSON.parse(JSON.stringify(pipelinePredictions));
+  const aSnap = JSON.parse(JSON.stringify(fieldAnnotations));
+  _autoSaveTimer = setTimeout(() => autoSave(pid, sSnap, pSnap, aSnap), 3000);
+}
+
+// Wire debounced auto-save to the form panel via event delegation
+document.getElementById('form-scroll').addEventListener('input',  scheduleAutoSave);
+document.getElementById('form-scroll').addEventListener('change', scheduleAutoSave);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PDF RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadPdf(paperId, filename) {
-  currentPaperId = paperId;
+  // ── Step 1: Auto-save the CURRENT paper before switching ──────────────────
+  // Must snapshot state before any reset; must use OLD currentPaperId
+  if (currentPaperId && currentPaperId !== paperId) {
+    clearTimeout(_autoSaveTimer);   // cancel any pending debounce
+    const prevId    = currentPaperId;
+    const spansSnap = JSON.parse(JSON.stringify(spans));
+    const predSnap  = JSON.parse(JSON.stringify(pipelinePredictions));
+    const annSnap   = JSON.parse(JSON.stringify(fieldAnnotations));
+    await autoSave(prevId, spansSnap, predSnap, annSnap);
+  }
+
+  // ── Step 2: Switch context ────────────────────────────────────────────────
+  currentPaperId  = paperId;
   currentFilename = filename;
-  document.getElementById('save-status').textContent = filename;
-  spans = [];
+  document.getElementById('save-status').textContent = `loading ${filename}…`;
+  spans             = [];
   pipelinePredictions = {};
   renderSpanTags();
 
-  // ── CRITICAL: Reset all form fields and annotation state when switching PDFs ──
+  // ── Step 3: Reset all form fields and annotation state ────────────────────
   resetForm();
 
   renderSidebar(); // update active paper highlight
 
-  // Reset auto-fill UI
+  // Reset auto-fill UI (resetForm already cleared values; just fix the hint)
   const afBtn = document.getElementById('autofill-btn');
   if (afBtn) {
-    const st = document.getElementById('f-study_type').value;
-    afBtn.disabled = !st;
+    afBtn.disabled = true;
     afBtn.textContent = 'Auto-fill from PDF';
-    document.getElementById('autofill-hint').textContent =
-      st ? 'Ready to extract' : 'Select a study type above to enable';
+    document.getElementById('autofill-hint').textContent = 'Select a study type above to enable';
     document.getElementById('autofill-loading').style.display = 'none';
   }
 
+  // ── Step 4: Load the PDF and restore saved annotation ─────────────────────
   const url = `/api/papers/${paperId}/pdf`;
   try {
     pdfDoc = await pdfjsLib.getDocument(url).promise;
@@ -2035,6 +2107,7 @@ async function prefillFromPDF() {
     btn.textContent = 'Re-fill from PDF';
     hint.textContent = `${filled} fields extracted`;
     hint.style.display = 'block';
+    scheduleAutoSave();   // persist AI extraction immediately
   } catch(e) {
     alert('Auto-fill error: ' + e.message);
     btn.textContent = 'Auto-fill from PDF';
@@ -2364,12 +2437,15 @@ async function loadExistingAnnotation() {
 
 async function saveAnnotation() {
   if (!currentPaperId) { alert('Select a paper first.'); return; }
+  clearTimeout(_autoSaveTimer);   // cancel any pending auto-save
 
   const payload = {
     data: getFormData(),
     spans: spans,
     field_annotations: fieldAnnotations,
   };
+  const statusEl = document.getElementById('save-status');
+  if (statusEl) statusEl.textContent = 'saving…';
   const res = await fetch(`/api/papers/${currentPaperId}/annotations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2377,8 +2453,7 @@ async function saveAnnotation() {
   });
   if (res.status === 401) { window.location.href = '/login'; return; }
   const result = await res.json();
-  document.getElementById('save-status').textContent =
-    `saved ${result.timestamp?.slice(11,19) || '✓'}`;
+  if (statusEl) statusEl.textContent = `saved ${result.timestamp?.slice(11,19) || '✓'}`;
   loadPapersAndProjects();
 }
 
