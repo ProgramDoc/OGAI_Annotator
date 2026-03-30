@@ -1443,20 +1443,38 @@ function scrollToSpanInPdf(span) {
 let _autoSaveTimer = null;
 let _autoSaving    = false;
 
-// Silent save — called on switch and by debounce; never alerts on failure
-async function autoSave(paperId, spansSnap, predictionsSnap, annotationsSnap) {
-  if (!paperId || _autoSaving) return;
+// Capture a complete snapshot of the current paper state from the DOM.
+// Must be called BEFORE any reset or context switch.
+function captureState(paperId) {
+  const formData = getFormData();
+  // getFormData() already embeds pipeline_predictions_json from the live
+  // pipelinePredictions object, so no extra override needed.
+  return {
+    paperId,
+    formData,
+    spans:            JSON.parse(JSON.stringify(spans)),
+    fieldAnnotations: JSON.parse(JSON.stringify(fieldAnnotations)),
+  };
+}
+
+// Write a captured state snapshot to the backend.
+// force=true bypasses the _autoSaving guard (used for switch-away saves).
+async function autoSave(snapshot, force = false) {
+  if (!snapshot || !snapshot.paperId) return;
+  if (_autoSaving && !force) return;   // background save already in flight — skip
   _autoSaving = true;
+
   const statusEl = document.getElementById('save-status');
   const prevText = statusEl ? statusEl.textContent : '';
   if (statusEl) statusEl.textContent = 'saving…';
+
   try {
     const payload = {
-      data:             { ...getFormData(), pipeline_predictions_json: JSON.stringify(predictionsSnap) },
-      spans:            spansSnap,
-      field_annotations: annotationsSnap,
+      data:              snapshot.formData,
+      spans:             snapshot.spans,
+      field_annotations: snapshot.fieldAnnotations,
     };
-    const res = await fetch(`/api/papers/${paperId}/annotations`, {
+    const res = await fetch(`/api/papers/${snapshot.paperId}/annotations`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
@@ -1464,19 +1482,28 @@ async function autoSave(paperId, spansSnap, predictionsSnap, annotationsSnap) {
     if (res.status === 401) { window.location.href = '/login'; return; }
     if (res.ok) {
       const result = await res.json();
-      if (statusEl) statusEl.textContent = `auto-saved ${result.timestamp?.slice(11,19) || '✓'}`;
+      // Only update the status bar if we're still on this paper
+      if (currentPaperId === snapshot.paperId && statusEl) {
+        statusEl.textContent = `auto-saved ${result.timestamp?.slice(11,19) || '✓'}`;
+      }
     } else {
-      if (statusEl) statusEl.textContent = prevText;
+      if (currentPaperId === snapshot.paperId && statusEl) {
+        statusEl.textContent = prevText;
+      }
+      console.warn('Auto-save HTTP error:', res.status);
     }
   } catch(e) {
-    if (statusEl) statusEl.textContent = prevText;
+    if (currentPaperId === snapshot.paperId && statusEl) {
+      statusEl.textContent = prevText;
+    }
     console.warn('Auto-save failed:', e);
   } finally {
     _autoSaving = false;
   }
 }
 
-// Debounced auto-save — fires 3 s after the last form change
+// Debounced auto-save — fires 3 s after the last form change.
+// Snapshots state immediately (at schedule time) so the closure is stable.
 function scheduleAutoSave() {
   if (!currentPaperId) return;
   clearTimeout(_autoSaveTimer);
@@ -1484,12 +1511,8 @@ function scheduleAutoSave() {
   if (statusEl && !statusEl.textContent.includes('saving')) {
     statusEl.textContent = 'unsaved changes…';
   }
-  // Snapshot mutable state now so the closure captures the right version
-  const pid   = currentPaperId;
-  const sSnap = JSON.parse(JSON.stringify(spans));
-  const pSnap = JSON.parse(JSON.stringify(pipelinePredictions));
-  const aSnap = JSON.parse(JSON.stringify(fieldAnnotations));
-  _autoSaveTimer = setTimeout(() => autoSave(pid, sSnap, pSnap, aSnap), 3000);
+  const snapshot = captureState(currentPaperId);
+  _autoSaveTimer = setTimeout(() => autoSave(snapshot), 3000);
 }
 
 // Wire debounced auto-save to the form panel via event delegation
@@ -1500,38 +1523,29 @@ document.getElementById('form-scroll').addEventListener('change', scheduleAutoSa
 // PDF RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadPdf(paperId, filename) {
-  // ── Step 1: Auto-save the CURRENT paper before switching ──────────────────
-  // Must snapshot state before any reset; must use OLD currentPaperId
+  // ── Step 1: Capture + force-save the CURRENT paper before switching ────────
+  // captureState() reads the live DOM — must happen before ANY reset.
+  // force=true bypasses _autoSaving so an in-flight background save never
+  // blocks this write. clearTimeout ensures the debounce doesn't fire again
+  // after the switch.
   if (currentPaperId && currentPaperId !== paperId) {
-    clearTimeout(_autoSaveTimer);   // cancel any pending debounce
-    const prevId    = currentPaperId;
-    const spansSnap = JSON.parse(JSON.stringify(spans));
-    const predSnap  = JSON.parse(JSON.stringify(pipelinePredictions));
-    const annSnap   = JSON.parse(JSON.stringify(fieldAnnotations));
-    await autoSave(prevId, spansSnap, predSnap, annSnap);
+    clearTimeout(_autoSaveTimer);
+    const snapshot = captureState(currentPaperId);   // snapshot DOM while still populated
+    await autoSave(snapshot, true);                  // force=true — always writes
   }
 
   // ── Step 2: Switch context ────────────────────────────────────────────────
-  currentPaperId  = paperId;
-  currentFilename = filename;
-  document.getElementById('save-status').textContent = `loading ${filename}…`;
-  spans             = [];
+  currentPaperId      = paperId;
+  currentFilename     = filename;
+  spans               = [];
   pipelinePredictions = {};
   renderSpanTags();
 
   // ── Step 3: Reset all form fields and annotation state ────────────────────
   resetForm();
+  renderSidebar();
 
-  renderSidebar(); // update active paper highlight
-
-  // Reset auto-fill UI (resetForm already cleared values; just fix the hint)
-  const afBtn = document.getElementById('autofill-btn');
-  if (afBtn) {
-    afBtn.disabled = true;
-    afBtn.textContent = 'Auto-fill from PDF';
-    document.getElementById('autofill-hint').textContent = 'Select a study type above to enable';
-    document.getElementById('autofill-loading').style.display = 'none';
-  }
+  document.getElementById('save-status').textContent = `loading ${filename}…`;
 
   // ── Step 4: Load the PDF and restore saved annotation ─────────────────────
   const url = `/api/papers/${paperId}/pdf`;
@@ -2437,23 +2451,9 @@ async function loadExistingAnnotation() {
 
 async function saveAnnotation() {
   if (!currentPaperId) { alert('Select a paper first.'); return; }
-  clearTimeout(_autoSaveTimer);   // cancel any pending auto-save
-
-  const payload = {
-    data: getFormData(),
-    spans: spans,
-    field_annotations: fieldAnnotations,
-  };
-  const statusEl = document.getElementById('save-status');
-  if (statusEl) statusEl.textContent = 'saving…';
-  const res = await fetch(`/api/papers/${currentPaperId}/annotations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (res.status === 401) { window.location.href = '/login'; return; }
-  const result = await res.json();
-  if (statusEl) statusEl.textContent = `saved ${result.timestamp?.slice(11,19) || '✓'}`;
+  clearTimeout(_autoSaveTimer);
+  const snapshot = captureState(currentPaperId);
+  await autoSave(snapshot, true);   // force=true — manual save always writes
   loadPapersAndProjects();
 }
 
