@@ -144,6 +144,7 @@ def init_db() -> None:
             "ALTER TABLE annotations ADD COLUMN correction_notes          TEXT",
             "ALTER TABLE annotations ADD COLUMN corrections_json          TEXT",
             "ALTER TABLE annotations ADD COLUMN pipeline_predictions_json TEXT",
+            "ALTER TABLE annotations ADD COLUMN field_annotations_json    TEXT",
         ]:
             try:
                 conn.execute(migration)
@@ -263,6 +264,7 @@ class PaperAssign(BaseModel):
 class AnnotationPayload(BaseModel):
     data: dict[str, Any] = {}
     spans: list[dict[str, Any]] = []
+    field_annotations: dict[str, Any] = {}
 
 class PrefillRequest(BaseModel):
     study_type: str
@@ -714,9 +716,10 @@ def get_annotations(paper_id: int, ogai_session: str | None = Cookie(default=Non
             data = json.loads(row["data_json"] or "{}")
         except Exception:
             data = {}
-        for col in ("correction_notes", "corrections_json", "pipeline_predictions_json"):
-            if row[col] and col not in data:
-                data[col] = row[col]
+        for col in ("correction_notes", "corrections_json", "pipeline_predictions_json", "field_annotations_json"):
+            val = row[col] if col in row.keys() else None
+            if val and col not in data:
+                data[col] = val
         annotations.append({"id": row["id"], "reviewer_id": row["reviewer_id"], "timestamp": row["timestamp"], "data": data})
 
     spans = conn.execute(
@@ -736,6 +739,7 @@ def save_annotation(paper_id: int, payload: AnnotationPayload, ogai_session: str
     correction_notes          = data.get("correction_notes", "") or ""
     corrections_json          = data.get("corrections_json", "") or ""
     pipeline_predictions_json = data.get("pipeline_predictions_json", "") or ""
+    field_annotations_json    = json.dumps(payload.field_annotations) if payload.field_annotations else (data.get("field_annotations_json", "") or "")
     now = datetime.now(timezone.utc).isoformat()
 
     conn = get_db()
@@ -743,15 +747,18 @@ def save_annotation(paper_id: int, payload: AnnotationPayload, ogai_session: str
         conn.execute(
             """INSERT INTO annotations
                    (paper_id, reviewer_id, data_json, timestamp,
-                    correction_notes, corrections_json, pipeline_predictions_json)
-               VALUES (?,?,?,?,?,?,?)
+                    correction_notes, corrections_json, pipeline_predictions_json,
+                    field_annotations_json)
+               VALUES (?,?,?,?,?,?,?,?)
                ON CONFLICT(paper_id, reviewer_id) DO UPDATE SET
                    data_json=excluded.data_json, timestamp=excluded.timestamp,
                    correction_notes=excluded.correction_notes,
                    corrections_json=excluded.corrections_json,
-                   pipeline_predictions_json=excluded.pipeline_predictions_json""",
+                   pipeline_predictions_json=excluded.pipeline_predictions_json,
+                   field_annotations_json=excluded.field_annotations_json""",
             (paper_id, reviewer_id, json.dumps(data), now,
-             correction_notes, corrections_json, pipeline_predictions_json),
+             correction_notes, corrections_json, pipeline_predictions_json,
+             field_annotations_json),
         )
         conn.execute("DELETE FROM spans WHERE paper_id=? AND reviewer_id=?", (paper_id, reviewer_id))
         for s in payload.spans:
@@ -964,8 +971,12 @@ FLAT_COLS = [
     "clinical_trial_phase","regulatory_context","registration_number","industry_sponsored",
     "data_source_type","database_name","adaptive_design","pragmatic_vs_explanatory",
     "trial_framework","target_trial_emulation","pilot_or_feasibility",
-    "correction_notes","corrections_json","pipeline_predictions_json",
+    "correction_notes","corrections_json","pipeline_predictions_json","field_annotations_json",
 ]
+
+# Analytics-friendly field annotation columns appended per-field
+# Each field tracked in fieldAnnotations gets: <field>__ann_status, <field>__ai_value,
+# <field>__human_value, <field>__flag, <field>__flag_note
 
 
 def _csv_row(vals: list) -> str:
@@ -975,35 +986,118 @@ def _csv_row(vals: list) -> str:
     return ",".join(_e(v) for v in vals) + "\r\n"
 
 
-@app.get("/api/export/csv")
-def export_csv(ogai_session: str | None = Cookie(default=None)):
-    user = require_user(ogai_session)
+def _build_export_rows(
+    user_id: int,
+    paper_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+) -> tuple[list[str], str]:
+    """
+    Returns (rows, filename) where rows is a list of CSV line strings (incl. header).
+    Filters: paper_id → single paper; project_id → all papers in that project;
+    neither → all user papers.
+    """
     conn = get_db()
-    papers = {p["id"]: dict(p) for p in conn.execute(
-        "SELECT id, filename, project_id FROM papers WHERE user_id=?", (user["id"],)
-    ).fetchall()}
+    papers_q = "SELECT id, filename, project_id FROM papers WHERE user_id=?"
+    params: list = [user_id]
+    if paper_id is not None:
+        papers_q += " AND id=?"
+        params.append(paper_id)
+    elif project_id is not None:
+        papers_q += " AND project_id=?"
+        params.append(project_id)
+
+    papers = {p["id"]: dict(p) for p in conn.execute(papers_q, params).fetchall()}
     proj_names = {p["id"]: p["name"] for p in conn.execute(
-        "SELECT id, name FROM projects WHERE user_id=?", (user["id"],)
+        "SELECT id, name FROM projects WHERE user_id=?", (user_id,)
     ).fetchall()}
+
     paper_ids = list(papers.keys())
     annotations = []
     if paper_ids:
         ph = ",".join("?" * len(paper_ids))
-        annotations = conn.execute(f"SELECT * FROM annotations WHERE paper_id IN ({ph})", paper_ids).fetchall()
+        annotations = conn.execute(
+            f"SELECT * FROM annotations WHERE paper_id IN ({ph})", paper_ids
+        ).fetchall()
     conn.close()
 
-    rows = [_csv_row(["filename","project","reviewer_id","timestamp"] + FLAT_COLS)]
+    # Collect all field_ids mentioned in any field_annotations_json so we
+    # can build consistent extra columns across the export
+    all_annotated_fields: set[str] = set()
+    parsed_anns: list[dict] = []
     for ann in annotations:
+        try:
+            fa = json.loads(
+                (ann["field_annotations_json"] if "field_annotations_json" in ann.keys() else None) or "{}"
+            )
+        except Exception:
+            fa = {}
+        all_annotated_fields.update(fa.keys())
+        parsed_anns.append(fa)
+
+    sorted_fields = sorted(all_annotated_fields)
+    ann_extra_cols = []
+    for fid in sorted_fields:
+        ann_extra_cols += [
+            f"{fid}__ann_status",
+            f"{fid}__ai_value",
+            f"{fid}__corrected_value",
+            f"{fid}__flagged",
+            f"{fid}__flag_note",
+        ]
+
+    header = ["filename", "project", "reviewer_id", "timestamp"] + FLAT_COLS + ann_extra_cols
+    rows: list[str] = [_csv_row(header)]
+
+    for ann, fa in zip(annotations, parsed_anns):
         try:
             data = json.loads(ann["data_json"] or "{}")
         except Exception:
             data = {}
-        for col in ("correction_notes","corrections_json","pipeline_predictions_json"):
-            if ann[col]:
-                data[col] = ann[col]
+        for col in ("correction_notes", "corrections_json", "pipeline_predictions_json", "field_annotations_json"):
+            val = ann[col] if col in ann.keys() else None
+            if val:
+                data[col] = val
+
         p = papers.get(ann["paper_id"], {})
         proj_name = proj_names.get(p.get("project_id"), "") if p.get("project_id") else ""
-        rows.append(_csv_row([p.get("filename",""), proj_name, ann["reviewer_id"], ann["timestamp"]] + [data.get(c,"") for c in FLAT_COLS]))
+        base = [p.get("filename", ""), proj_name, ann["reviewer_id"], ann["timestamp"]]
+        base += [data.get(c, "") for c in FLAT_COLS]
 
-    return StreamingResponse(iter(rows), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=ogai_annotations.csv"})
+        # Append per-field annotation analytics columns
+        for fid in sorted_fields:
+            fann = fa.get(fid, {})
+            base += [
+                fann.get("status", ""),
+                fann.get("ai_value", ""),
+                fann.get("corrected_value", ""),
+                "Yes" if fann.get("flagged") else "",
+                fann.get("flag_note", ""),
+            ]
+
+        rows.append(_csv_row(base))
+
+    # Choose a sensible filename
+    if paper_id is not None and paper_ids:
+        fn = f"ogai_{papers[paper_ids[0]]['filename'].replace('.pdf','')}.csv"
+    elif project_id is not None:
+        fn = f"ogai_project_{proj_names.get(project_id, str(project_id))}.csv".replace(" ", "_")
+    else:
+        fn = "ogai_annotations.csv"
+
+    return rows, fn
+
+
+@app.get("/api/export/csv")
+def export_csv(
+    paper_id:   Optional[int] = Query(default=None),
+    project_id: Optional[int] = Query(default=None),
+    ogai_session: str | None = Cookie(default=None),
+):
+    user = require_user(ogai_session)
+    rows, filename = _build_export_rows(user["id"], paper_id=paper_id, project_id=project_id)
+    safe_fn = filename.replace('"', '')
+    return StreamingResponse(
+        iter(rows),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{safe_fn}"'},
+    )

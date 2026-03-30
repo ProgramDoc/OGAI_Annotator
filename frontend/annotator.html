@@ -249,8 +249,8 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 .field-row { margin-bottom: 10px; position: relative; }
 .field-label {
   font-size: 10.5px; font-weight: 600; color: var(--blue);
-  margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
-  cursor: pointer; user-select: none;
+  margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+  flex-wrap: wrap; cursor: default; user-select: none; row-gap: 3px;
 }
 .field-label:hover .field-anchor-btn { opacity: 1; }
 .field-anchor-btn {
@@ -279,7 +279,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   border-color: var(--purple); box-shadow: 0 0 0 2px rgba(124,58,237,.12);
 }
 
-/* AI pre-fill amber / corrections red borders */
+/* AI pre-fill amber / corrections — declared before field-confirmed so confirmed (green) wins */
 .field-prefilled > input,
 .field-prefilled > textarea,
 .field-prefilled > select {
@@ -288,7 +288,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 .field-corrected > input,
 .field-corrected > textarea,
 .field-corrected > select {
-  border-left: 3px solid #dc2626 !important;
+  border-left: 3px solid #d97706 !important;
 }
 
 /* Span tag below linked field */
@@ -321,6 +321,119 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 .autofill-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .autofill-hint { font-size: 10px; color: #92400e; margin-top: 5px; }
 .autofill-loading { font-size: 10px; color: #92400e; margin-top: 5px; display: none; font-style: italic; }
+
+/* ── PER-FIELD ANNOTATION BUTTONS ── */
+.ann-btns { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.ann-btn {
+  font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid;
+  cursor: pointer; font-weight: 700; font-family: inherit; background: transparent;
+  line-height: 1.6; transition: all .12s; white-space: nowrap;
+}
+.ann-btn.confirm  { border-color: #16a34a; color: #16a34a; }
+.ann-btn.confirm:hover  { background: #dcfce7; }
+.ann-btn.confirm.active  { background: #16a34a; color: #fff; }
+.ann-btn.correct  { border-color: #d97706; color: #d97706; }
+.ann-btn.correct:hover  { background: #fef3c7; }
+.ann-btn.correct.active  { background: #d97706; color: #fff; }
+.ann-btn.flag-btn { border-color: #7c3aed; color: #7c3aed; }
+.ann-btn.flag-btn:hover { background: #f5f3ff; }
+.ann-btn.flag-btn.active { background: #7c3aed; color: #fff; }
+
+.ann-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+  flex-shrink: 0; background: #e2e8f0; transition: background .15s; margin-right: 1px;
+}
+.ann-status-dot.confirmed { background: #16a34a; }
+.ann-status-dot.corrected { background: #d97706; }
+.ann-status-dot.flagged   { background: #7c3aed; }
+
+/* Field status borders */
+.field-confirmed > input,
+.field-confirmed > textarea,
+.field-confirmed > select { border-left: 3px solid #16a34a !important; }
+/* field-corrected and field-prefilled already defined below */
+
+/* Correction sub-area */
+.correction-area {
+  display: none; margin-top: 6px; background: #fffbeb;
+  border: 1px solid #f59e0b; border-radius: 5px; padding: 8px;
+}
+.correction-area.open { display: block; }
+.ca-header { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.ca-header > span {
+  font-size: 9.5px; font-weight: 700; color: #92400e;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.use-ai-btn {
+  font-size: 9px; padding: 2px 7px; border: 1px solid #d97706;
+  border-radius: 3px; background: transparent; color: #d97706;
+  cursor: pointer; font-family: inherit; margin-left: auto; white-space: nowrap;
+}
+.use-ai-btn:hover { background: #fef3c7; }
+.correction-area textarea {
+  width: 100%; padding: 5px 8px; border: 1px solid #fed7aa; border-radius: 4px;
+  font-family: inherit; font-size: 12px; resize: vertical; min-height: 42px;
+  background: #fff; color: var(--text); outline: none;
+}
+.correction-area textarea:focus { border-color: #d97706; }
+
+/* Flag sub-area */
+.flag-area {
+  display: none; margin-top: 6px; background: #f5f3ff;
+  border: 1px solid #c4b5fd; border-radius: 5px; padding: 8px;
+}
+.flag-area.open { display: block; }
+.flag-area-label {
+  font-size: 9.5px; font-weight: 700; color: #5b21b6;
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px;
+}
+.flag-area textarea {
+  width: 100%; padding: 5px 8px; border: 1px solid #c4b5fd; border-radius: 4px;
+  font-family: inherit; font-size: 12px; resize: vertical; min-height: 36px;
+  background: #fff; color: var(--text); outline: none;
+}
+.flag-area textarea:focus { border-color: #7c3aed; }
+
+/* Export modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: none; align-items: center; justify-content: center; z-index: 2000;
+}
+.modal-box {
+  background: #fff; border-radius: 10px; padding: 24px;
+  min-width: 340px; max-width: 500px; width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.modal-title {
+  font-size: 13px; font-weight: 700; color: var(--navy);
+  margin-bottom: 14px; letter-spacing: -.2px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.export-opt {
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; margin-bottom: 7px; transition: all .12s;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.export-opt:hover { border-color: var(--sky); background: #f0f7ff; }
+.export-opt strong { font-size: 12px; color: var(--navy); font-weight: 600; }
+.export-opt span { font-size: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+.modal-cancel {
+  margin-top: 10px; width: 100%; padding: 8px; border: 1px solid var(--border);
+  border-radius: 5px; background: transparent; color: var(--muted);
+  cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600;
+}
+.modal-cancel:hover { background: var(--bg); }
+
+/* Paper-level status badges in bottom bar */
+#form-bottom { background: #f8fafc; border-top: 2px solid var(--border); }
+#form-bottom .status-label {
+  font-size: 9px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; display: block;
+}
+#ann-summary {
+  font-size: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+  padding: 4px 0; flex-basis: 100%; order: -1;
+}
 
 .type-section { display: none; }
 .type-section.visible { display: block; }
@@ -394,7 +507,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
   <div class="tb-sep"></div>
   <button class="tb-btn" onclick="logout()" style="color:#f87171;border-color:rgba(248,113,113,.3);">Sign out</button>
   <div class="tb-sep"></div>
-  <button class="tb-btn" onclick="exportCSV()">⬇ Export CSV</button>
+  <button class="tb-btn" onclick="showExportDialog()">⬇ Export CSV</button>
   <button class="tb-btn primary" onclick="saveAnnotation()" id="save-btn">Save</button>
   <span id="save-status">no paper selected</span>
 </div>
@@ -555,14 +668,25 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
 
   </div><!-- /form-scroll -->
 
-  <div id="form-bottom">
-    <button id="btn-confirm" onclick="setAction('Confirm')">✓ Confirm</button>
-    <button id="btn-correct" onclick="setAction('Correct')">✎ Correct</button>
-    <button id="btn-flag"    onclick="setAction('Flag')">⚑ Flag</button>
+  <div id="form-bottom" style="flex-wrap:wrap;gap:6px;">
+    <span id="ann-summary">No fields annotated yet</span>
+    <span class="status-label" style="flex-basis:100%;margin-bottom:2px;">Paper Status</span>
+    <button id="btn-confirm" onclick="setAction('Complete')" title="Mark this paper as fully reviewed and complete" style="font-size:11px;">✓ Complete</button>
+    <button id="btn-correct" onclick="setAction('Needs Review')" title="Mark this paper as needing further review" style="font-size:11px;">✎ Needs Review</button>
+    <button id="btn-flag"    onclick="setAction('Flagged')" title="Flag this paper for discussion" style="font-size:11px;">⚑ Flag Paper</button>
   </div>
 </div><!-- /form-panel -->
 
 </div><!-- /layout -->
+
+<!-- ── EXPORT MODAL ────────────────────────────────────────────────────────── -->
+<div id="export-modal" class="modal-overlay" onclick="if(event.target===this)closeExportModal()">
+  <div class="modal-box">
+    <div class="modal-title">⬇ Export CSV — choose scope</div>
+    <div id="export-options"></div>
+    <button class="modal-cancel" onclick="closeExportModal()">Cancel</button>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
@@ -929,6 +1053,7 @@ let pendingSelection = null;
 let spans = [];
 let reviewerAction = "Confirm";
 let pipelinePredictions = {};   // baseline from AI auto-fill
+let fieldAnnotations = {};      // per-field annotation state
 let allPapers = [];             // [{id, filename, annotated_by, project_id}]
 let allProjects = [];           // [{id, name}]
 let collapsedProjects = new Set();
@@ -944,13 +1069,54 @@ function buildField(f) {
   div.className = 'field-row';
   div.id = 'fr-' + f.id;
 
+  // ── Label row ──
   const lbl = document.createElement('div');
   lbl.className = 'field-label';
-  lbl.innerHTML = `${f.label}
-    <button class="field-anchor-btn" data-field="${f.id}"
-      onclick="setActiveField('${f.id}', this)">anchor</button>`;
+
+  const labelText = document.createElement('span');
+  labelText.textContent = f.label;
+  lbl.appendChild(labelText);
+
+  const statusDot = document.createElement('span');
+  statusDot.className = 'ann-status-dot none';
+  statusDot.id = 'asd-' + f.id;
+  lbl.appendChild(statusDot);
+
+  const anchorBtn = document.createElement('button');
+  anchorBtn.className = 'field-anchor-btn';
+  anchorBtn.dataset.field = f.id;
+  anchorBtn.textContent = 'anchor';
+  anchorBtn.onclick = () => setActiveField(f.id, anchorBtn);
+  lbl.appendChild(anchorBtn);
+
+  const annBtns = document.createElement('div');
+  annBtns.className = 'ann-btns';
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'ann-btn confirm';
+  confirmBtn.title = 'Confirm: the AI value is correct as-is';
+  confirmBtn.textContent = '✓ Confirm';
+  confirmBtn.onclick = (e) => { e.stopPropagation(); setFieldAnnotation(f.id, 'confirmed'); };
+
+  const correctBtn = document.createElement('button');
+  correctBtn.className = 'ann-btn correct';
+  correctBtn.title = 'Correct: the AI value is wrong — enter the correct value below';
+  correctBtn.textContent = '✎ Correct';
+  correctBtn.onclick = (e) => { e.stopPropagation(); openCorrectionArea(f.id); };
+
+  const flagBtn = document.createElement('button');
+  flagBtn.className = 'ann-btn flag-btn';
+  flagBtn.title = 'Flag: leave a note about this field (can combine with Confirm or Correct)';
+  flagBtn.textContent = '⚑';
+  flagBtn.onclick = (e) => { e.stopPropagation(); toggleFlagArea(f.id); };
+
+  annBtns.appendChild(confirmBtn);
+  annBtns.appendChild(correctBtn);
+  annBtns.appendChild(flagBtn);
+  lbl.appendChild(annBtns);
   div.appendChild(lbl);
 
+  // ── Main input ──
   let el;
   if (f.type === 'textarea') {
     el = document.createElement('textarea');
@@ -969,6 +1135,28 @@ function buildField(f) {
   el.setAttribute('data-field', f.id);
   div.appendChild(el);
 
+  // ── Correction sub-area ──
+  const ca = document.createElement('div');
+  ca.className = 'correction-area';
+  ca.id = 'ca-' + f.id;
+  ca.innerHTML = `
+    <div class="ca-header">
+      <span>Correction — type the correct value</span>
+      <button class="use-ai-btn" onclick="useAiValue('${f.id}')">← Use AI value</button>
+    </div>
+    <textarea id="fc-${f.id}" placeholder="Enter the corrected value…" oninput="onCorrectionInput('${f.id}')"></textarea>`;
+  div.appendChild(ca);
+
+  // ── Flag sub-area ──
+  const fa = document.createElement('div');
+  fa.className = 'flag-area';
+  fa.id = 'fa-' + f.id;
+  fa.innerHTML = `
+    <div class="flag-area-label">⚑ Flag note</div>
+    <textarea id="ff-${f.id}" placeholder="What are you flagging about this field?" oninput="onFlagInput('${f.id}')"></textarea>`;
+  div.appendChild(fa);
+
+  // ── Span tag container ──
   const stc = document.createElement('div');
   stc.id = 'spans-' + f.id;
   div.appendChild(stc);
@@ -1043,10 +1231,23 @@ function updateTypeSpecific(studyType) {
 // ACTIVE FIELD & SPAN LINKING
 // ═══════════════════════════════════════════════════════════════════════════
 function setActiveField(fieldId, btn) {
+  // If field already has a linked span: navigate to it (toggle link mode off/on)
+  const linkedSpan = spans.find(s => s.field_name === fieldId);
+
+  // If same field is already active, deactivate
   if (activeField === fieldId) {
     clearActiveField();
+    // Still scroll to span if linked
+    if (linkedSpan) {
+      const pageEl = document.querySelector(`.page-wrapper[data-page="${linkedSpan.page}"]`);
+      if (pageEl) {
+        pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => flashSpanBox(linkedSpan), 450);
+      }
+    }
     return;
   }
+
   if (activeFieldBtn) {
     activeFieldBtn.textContent = isFieldLinked(activeField) ? 'linked ✓' : 'anchor';
     activeFieldBtn.classList.remove('active');
@@ -1055,25 +1256,30 @@ function setActiveField(fieldId, btn) {
   }
   activeField = fieldId;
   activeFieldBtn = btn;
-  btn.textContent = '● active';
-  btn.classList.add('active');
-  const row = document.getElementById('fr-' + fieldId);
-  if (row) row.classList.add('active-field');
 
-  document.getElementById('active-field-banner').style.display = 'block';
-  document.getElementById('active-field-banner').textContent = `📎 Select text in PDF to link → "${fieldId}"`;
-
-  if (pendingSelection) showLinkBtn();
-
-  // ── Scroll PDF to span if this field is already linked ──
-  const linkedSpan = spans.find(s => s.field_name === fieldId);
   if (linkedSpan) {
+    // Already linked: navigate to span and enter re-link mode
+    btn.textContent = '● active';
+    btn.classList.add('active');
+    const row = document.getElementById('fr-' + fieldId);
+    if (row) row.classList.add('active-field');
+    document.getElementById('active-field-banner').style.display = 'block';
+    document.getElementById('active-field-banner').textContent = `📎 Re-select text to relink → "${fieldId}"`;
     const pageEl = document.querySelector(`.page-wrapper[data-page="${linkedSpan.page}"]`);
     if (pageEl) {
       pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => flashSpanBox(linkedSpan), 450);
     }
+  } else {
+    btn.textContent = '● active';
+    btn.classList.add('active');
+    const row = document.getElementById('fr-' + fieldId);
+    if (row) row.classList.add('active-field');
+    document.getElementById('active-field-banner').style.display = 'block';
+    document.getElementById('active-field-banner').textContent = `📎 Select text in PDF to link → "${fieldId}"`;
   }
+
+  if (pendingSelection) showLinkBtn();
 }
 
 function clearActiveField() {
@@ -1202,10 +1408,14 @@ function renderSpanTags() {
     tag.className = 'span-tag';
     tag.style.borderColor = colour + '80';
     tag.style.background = colour + '18';
+    tag.title = 'Click to jump to this location in the PDF';
+    tag.style.cursor = 'pointer';
     tag.innerHTML = `
       <span class="st-text">"${s.text.substring(0,80)}${s.text.length>80?'…':''}"</span>
-      <span class="st-loc">p.${s.page}</span>
-      <button class="st-del" onclick="removeSpan('${s.field_name}')" title="Remove link">✕</button>`;
+      <span class="st-loc" title="Page ${s.page} — click to navigate">p.${s.page} 🔍</span>
+      <button class="st-del" onclick="event.stopPropagation();removeSpan('${s.field_name}')" title="Remove link">✕</button>`;
+    // Click span tag → scroll PDF to that location and flash the highlight box
+    tag.addEventListener('click', () => scrollToSpanInPdf(s));
     container.appendChild(tag);
 
     const el = document.getElementById('f-' + s.field_name);
@@ -1214,6 +1424,15 @@ function renderSpanTags() {
     const btn = document.querySelector(`.field-anchor-btn[data-field="${s.field_name}"]`);
     if (btn) { btn.textContent = 'linked ✓'; btn.classList.add('linked'); btn.classList.remove('active'); }
   });
+}
+
+function scrollToSpanInPdf(span) {
+  if (!span) return;
+  const pageEl = document.querySelector(`.page-wrapper[data-page="${span.page}"]`);
+  if (pageEl) {
+    pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => flashSpanBox(span), 450);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1226,6 +1445,10 @@ async function loadPdf(paperId, filename) {
   spans = [];
   pipelinePredictions = {};
   renderSpanTags();
+
+  // ── CRITICAL: Reset all form fields and annotation state when switching PDFs ──
+  resetForm();
+
   renderSidebar(); // update active paper highlight
 
   // Reset auto-fill UI
@@ -1387,6 +1610,9 @@ function getFormData() {
   data.corrections_json = JSON.stringify(corrections);
   data.pipeline_predictions_json = JSON.stringify(pipelinePredictions);
 
+  // Per-field annotation state (the primary annotation record)
+  data.field_annotations_json = JSON.stringify(fieldAnnotations);
+
   return data;
 }
 
@@ -1396,6 +1622,12 @@ function setFormData(data) {
   // Restore AI baseline if present
   if (data.pipeline_predictions_json) {
     try { pipelinePredictions = JSON.parse(data.pipeline_predictions_json); } catch(e) {}
+  }
+
+  // Restore per-field annotation state
+  fieldAnnotations = {};
+  if (data.field_annotations_json) {
+    try { fieldAnnotations = JSON.parse(data.field_annotations_json); } catch(e) {}
   }
 
   // Cascade dropdowns first
@@ -1421,11 +1653,27 @@ function setFormData(data) {
       if (el && v !== undefined) el.value = v;
     });
     if (data.reviewer_action) setAction(data.reviewer_action, false);
+
+    // Restore per-field annotation UI state
+    Object.entries(fieldAnnotations).forEach(([fieldId, ann]) => {
+      updateFieldAnnotationUI(fieldId);
+      if (ann.status === 'corrected') {
+        const ca = document.getElementById('ca-' + fieldId);
+        const fc = document.getElementById('fc-' + fieldId);
+        if (ca) ca.classList.add('open');
+        if (fc) fc.value = ann.corrected_value || '';
+      }
+      if (ann.flagged) {
+        const fa = document.getElementById('fa-' + fieldId);
+        const ff = document.getElementById('ff-' + fieldId);
+        if (fa) fa.classList.add('open');
+        if (ff) ff.value = ann.flag_note || '';
+      }
+    });
+    updateAnnotationSummary();
+
     // Restore corrections highlighting on reload
-    if (data.reviewer_action === 'Correct' || data.reviewer_action === 'Flag') {
-      refreshCorrectionsUI();
-    } else if (Object.keys(pipelinePredictions).length > 0) {
-      // Re-apply amber borders for unmodified pre-filled fields
+    if (Object.keys(pipelinePredictions).length > 0) {
       refreshPrefilledUI();
     }
   }, 50);
@@ -1437,26 +1685,9 @@ function refreshPrefilledUI() {
     const el = document.getElementById('f-' + k);
     const row = document.getElementById('fr-' + k);
     if (!el || !row) return;
+    // Don't override fields the reviewer has already explicitly annotated
+    if (row.classList.contains('field-confirmed') || row.classList.contains('field-corrected')) return;
     if (el.value === (v || '')) {
-      row.classList.add('field-prefilled');
-    }
-  });
-}
-
-function refreshCorrectionsUI() {
-  document.querySelectorAll('.field-prefilled, .field-corrected').forEach(el => {
-    el.classList.remove('field-prefilled', 'field-corrected');
-  });
-  if (!Object.keys(pipelinePredictions).length) return;
-  Object.entries(pipelinePredictions).forEach(([k, v]) => {
-    const el = document.getElementById('f-' + k);
-    const row = document.getElementById('fr-' + k);
-    if (!el || !row) return;
-    const current = el.value || '';
-    const baseline = v || '';
-    if (current !== '' && current !== baseline) {
-      row.classList.add('field-corrected');
-    } else if (current !== '') {
       row.classList.add('field-prefilled');
     }
   });
@@ -1465,15 +1696,282 @@ function refreshCorrectionsUI() {
 function setAction(action, visual=true) {
   reviewerAction = action;
   if (!visual) return;
-  ['Confirm','Correct','Flag'].forEach(a => {
-    const btn = document.getElementById('btn-' + a.toLowerCase());
+  ['Complete','Needs Review','Flagged'].forEach(a => {
+    const key = a === 'Complete' ? 'confirm' : a === 'Needs Review' ? 'correct' : 'flag';
+    const btn = document.getElementById('btn-' + key);
     if (btn) btn.style.fontWeight = (a===action) ? '900' : '700';
     if (btn) btn.style.outline = (a===action) ? '2px solid #1e293b' : 'none';
   });
-  // Refresh correction highlights when action changes
-  if (action === 'Correct' || action === 'Flag') {
-    refreshCorrectionsUI();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORM RESET
+// ═══════════════════════════════════════════════════════════════════════════
+function resetForm() {
+  // Clear all input/textarea/select values
+  document.querySelectorAll('[id^="f-"]').forEach(el => {
+    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    else el.value = '';
+  });
+
+  // Clear correction inputs and flag inputs
+  document.querySelectorAll('[id^="fc-"]').forEach(el => el.value = '');
+  document.querySelectorAll('[id^="ff-"]').forEach(el => el.value = '');
+
+  // Close all correction + flag areas
+  document.querySelectorAll('.correction-area').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.flag-area').forEach(el => el.classList.remove('open'));
+
+  // Reset per-field annotation UI (buttons + dots)
+  document.querySelectorAll('.ann-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.ann-status-dot').forEach(dot => {
+    dot.className = 'ann-status-dot none';
+  });
+
+  // Remove field-level border classes
+  document.querySelectorAll('.field-confirmed,.field-prefilled,.field-corrected').forEach(el => {
+    el.classList.remove('field-confirmed','field-prefilled','field-corrected');
+  });
+
+  // Reset cascade dropdowns
+  const subEl = document.getElementById('f-subcategory');
+  if (subEl) subEl.innerHTML = '<option value="">— select major first —</option>';
+  const stEl = document.getElementById('f-study_type');
+  if (stEl) stEl.innerHTML = '<option value="">— select subcategory first —</option>';
+
+  // Hide type-specific section
+  const sec = document.getElementById('type-specific-section');
+  if (sec) sec.style.display = 'none';
+
+  // Reset state
+  fieldAnnotations = {};
+  pipelinePredictions = {};
+  reviewerAction = 'Confirm';
+
+  // Reset autofill button
+  const afBtn = document.getElementById('autofill-btn');
+  if (afBtn) {
+    afBtn.disabled = true;
+    afBtn.textContent = 'Auto-fill from PDF';
   }
+  const afHint = document.getElementById('autofill-hint');
+  if (afHint) afHint.textContent = 'Select a study type above to enable';
+  const afLoad = document.getElementById('autofill-loading');
+  if (afLoad) afLoad.style.display = 'none';
+
+  // Reset action buttons
+  ['confirm','correct','flag'].forEach(k => {
+    const btn = document.getElementById('btn-' + k);
+    if (btn) { btn.style.fontWeight = '700'; btn.style.outline = 'none'; }
+  });
+
+  updateAnnotationSummary();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PER-FIELD ANNOTATION SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setFieldAnnotation(fieldId, status) {
+  // Toggle confirm off: if already confirmed with no flag, clear annotation state
+  if (status === 'confirmed') {
+    const cur = fieldAnnotations[fieldId];
+    if (cur && cur.status === 'confirmed' && !cur.flagged) {
+      delete fieldAnnotations[fieldId];
+      updateFieldAnnotationUI(fieldId);   // restores amber border if prefilled
+      updateAnnotationSummary();
+      return;
+    }
+  }
+  if (!fieldAnnotations[fieldId]) fieldAnnotations[fieldId] = {};
+  const ann = fieldAnnotations[fieldId];
+  ann.status = status;
+  const aiVal = pipelinePredictions[fieldId] || '';
+  const curVal = (document.getElementById('f-' + fieldId) || {}).value || '';
+  ann.ai_value = aiVal;
+  ann.original_value = curVal;
+  if (status === 'confirmed') {
+    ann.corrected_value = '';
+    // Close correction area
+    const ca = document.getElementById('ca-' + fieldId);
+    if (ca) ca.classList.remove('open');
+  }
+  updateFieldAnnotationUI(fieldId);
+  updateAnnotationSummary();
+}
+
+function openCorrectionArea(fieldId) {
+  if (!fieldAnnotations[fieldId]) fieldAnnotations[fieldId] = {};
+  const ann = fieldAnnotations[fieldId];
+  const prevStatus = ann.status;
+  ann.status = 'corrected';
+  const aiVal = pipelinePredictions[fieldId] || '';
+  const curVal = (document.getElementById('f-' + fieldId) || {}).value || '';
+  ann.ai_value = aiVal;
+  ann.original_value = curVal;
+
+  const ca = document.getElementById('ca-' + fieldId);
+  if (ca) {
+    const isOpen = ca.classList.contains('open');
+    // Toggle if already open and was already corrected
+    if (isOpen && prevStatus === 'corrected') {
+      ca.classList.remove('open');
+      // revert status if no correction text
+      const fc = document.getElementById('fc-' + fieldId);
+      if (!fc || !fc.value.trim()) {
+        delete fieldAnnotations[fieldId].status;
+        if (!Object.keys(fieldAnnotations[fieldId]).length) delete fieldAnnotations[fieldId];
+      }
+      updateFieldAnnotationUI(fieldId);
+      updateAnnotationSummary();
+      return;
+    }
+    ca.classList.add('open');
+    setTimeout(() => {
+      const fc = document.getElementById('fc-' + fieldId);
+      if (fc) fc.focus();
+    }, 50);
+  }
+  updateFieldAnnotationUI(fieldId);
+  updateAnnotationSummary();
+}
+
+function useAiValue(fieldId) {
+  const fc = document.getElementById('fc-' + fieldId);
+  if (!fc) return;
+  const aiVal = pipelinePredictions[fieldId] || (document.getElementById('f-' + fieldId) || {}).value || '';
+  fc.value = aiVal;
+  fc.focus();
+  onCorrectionInput(fieldId);
+}
+
+function onCorrectionInput(fieldId) {
+  if (!fieldAnnotations[fieldId]) fieldAnnotations[fieldId] = {};
+  const fc = document.getElementById('fc-' + fieldId);
+  fieldAnnotations[fieldId].corrected_value = fc ? fc.value : '';
+  updateAnnotationSummary();
+}
+
+function toggleFlagArea(fieldId) {
+  if (!fieldAnnotations[fieldId]) fieldAnnotations[fieldId] = {};
+  const ann = fieldAnnotations[fieldId];
+  ann.flagged = !ann.flagged;
+  const fa = document.getElementById('fa-' + fieldId);
+  if (fa) {
+    if (ann.flagged) {
+      fa.classList.add('open');
+      setTimeout(() => { const ff = document.getElementById('ff-' + fieldId); if (ff) ff.focus(); }, 50);
+    } else {
+      fa.classList.remove('open');
+      ann.flag_note = '';
+      const ff = document.getElementById('ff-' + fieldId);
+      if (ff) ff.value = '';
+    }
+  }
+  updateFieldAnnotationUI(fieldId);
+  updateAnnotationSummary();
+}
+
+function onFlagInput(fieldId) {
+  if (!fieldAnnotations[fieldId]) fieldAnnotations[fieldId] = {};
+  const ff = document.getElementById('ff-' + fieldId);
+  fieldAnnotations[fieldId].flag_note = ff ? ff.value : '';
+}
+
+function updateFieldAnnotationUI(fieldId) {
+  const ann = fieldAnnotations[fieldId] || {};
+  const dot = document.getElementById('asd-' + fieldId);
+  const row = document.getElementById('fr-' + fieldId);
+
+  // Status dot
+  if (dot) {
+    dot.className = 'ann-status-dot';
+    if (ann.status === 'confirmed') dot.classList.add('confirmed');
+    else if (ann.status === 'corrected') dot.classList.add('corrected');
+    else if (ann.flagged) dot.classList.add('flagged');
+    else dot.classList.add('none');
+    // If both corrected and flagged use corrected colour (higher priority)
+  }
+
+  // Border class on field-row — confirmed green overrides amber prefilled
+  if (row) {
+    row.classList.remove('field-confirmed','field-corrected','field-prefilled');
+    if (ann.status === 'confirmed') row.classList.add('field-confirmed');
+    else if (ann.status === 'corrected') row.classList.add('field-corrected');
+    // If neither, restore amber prefilled border if AI populated it and value unchanged
+    else if (Object.keys(pipelinePredictions).length) {
+      const el = document.getElementById('f-' + fieldId);
+      const baseline = pipelinePredictions[fieldId] || '';
+      if (el && el.value === baseline && baseline !== '') row.classList.add('field-prefilled');
+    }
+  }
+
+  // Active button highlight
+  const annBtns = row ? row.querySelectorAll('.ann-btn') : [];
+  annBtns.forEach(btn => {
+    btn.classList.remove('active');
+    if (ann.status === 'confirmed' && btn.classList.contains('confirm')) btn.classList.add('active');
+    if (ann.status === 'corrected' && btn.classList.contains('correct')) btn.classList.add('active');
+    if (ann.flagged && btn.classList.contains('flag-btn')) btn.classList.add('active');
+  });
+}
+
+function updateAnnotationSummary() {
+  const total = Object.keys(fieldAnnotations).length;
+  const confirmed = Object.values(fieldAnnotations).filter(a => a.status === 'confirmed').length;
+  const corrected = Object.values(fieldAnnotations).filter(a => a.status === 'corrected').length;
+  const flagged   = Object.values(fieldAnnotations).filter(a => a.flagged).length;
+  const el = document.getElementById('ann-summary');
+  if (!el) return;
+  if (total === 0) {
+    el.textContent = 'No fields annotated yet — use ✓ Confirm or ✎ Correct on individual fields above';
+    return;
+  }
+  const parts = [];
+  if (confirmed) parts.push(`${confirmed} confirmed`);
+  if (corrected) parts.push(`${corrected} corrected`);
+  if (flagged)   parts.push(`${flagged} flagged`);
+  el.textContent = `Field annotations: ${parts.join(' · ')}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT DIALOG
+// ═══════════════════════════════════════════════════════════════════════════
+function showExportDialog() {
+  const modal = document.getElementById('export-modal');
+  const opts = document.getElementById('export-options');
+  opts.innerHTML = '';
+
+  function makeOpt(icon, title, subtitle, action) {
+    const d = document.createElement('div');
+    d.className = 'export-opt';
+    d.innerHTML = `<strong>${icon} ${title}</strong><span>${subtitle}</span>`;
+    d.onclick = action;
+    opts.appendChild(d);
+  }
+
+  makeOpt('📁', 'All PDFs (entire library)',
+    'Every annotated paper across all projects',
+    () => { closeExportModal(); window.open('/api/export/csv', '_blank'); });
+
+  if (currentPaperId) {
+    makeOpt('📄', `Current PDF only`,
+      `${currentFilename || 'active paper'} — one row`,
+      () => { closeExportModal(); window.open(`/api/export/csv?paper_id=${currentPaperId}`, '_blank'); });
+  }
+
+  allProjects.forEach(proj => {
+    const count = allPapers.filter(p => p.project_id === proj.id).length;
+    makeOpt('🗂', `Project: ${proj.name}`,
+      `${count} paper${count !== 1 ? 's' : ''}`,
+      () => { closeExportModal(); window.open(`/api/export/csv?project_id=${proj.id}`, '_blank'); });
+  });
+
+  modal.style.display = 'flex';
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal').style.display = 'none';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1508,8 +2006,8 @@ async function prefillFromPDF() {
     pipelinePredictions = predictions;
 
     // Clear existing amber/red borders
-    document.querySelectorAll('.field-prefilled, .field-corrected').forEach(el => {
-      el.classList.remove('field-prefilled', 'field-corrected');
+    document.querySelectorAll('.field-prefilled, .field-corrected, .field-confirmed').forEach(el => {
+      el.classList.remove('field-prefilled', 'field-corrected', 'field-confirmed');
     });
 
     // Fill fields and mark amber
@@ -1870,6 +2368,7 @@ async function saveAnnotation() {
   const payload = {
     data: getFormData(),
     spans: spans,
+    field_annotations: fieldAnnotations,
   };
   const res = await fetch(`/api/papers/${currentPaperId}/annotations`, {
     method: 'POST',
@@ -1881,10 +2380,6 @@ async function saveAnnotation() {
   document.getElementById('save-status').textContent =
     `saved ${result.timestamp?.slice(11,19) || '✓'}`;
   loadPapersAndProjects();
-}
-
-async function exportCSV() {
-  window.open('/api/export/csv', '_blank');
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
