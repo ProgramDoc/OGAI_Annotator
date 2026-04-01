@@ -68,6 +68,56 @@ class PrefillRequest(BaseModel):
     study_type: str
 
 
+# ─────────────────────────────────────────────
+# Classification taxonomy (mirrors frontend)
+# ─────────────────────────────────────────────
+_TAXONOMY = """
+Major categories and their subcategories and study types:
+
+Primary Studies:
+  Randomized Controlled → Randomized Controlled Trial, Cluster Randomized Trial, Stepped-Wedge Cluster RCT, Crossover Trial
+  Non-Randomized Controlled → Non-Randomized Trial
+  Non-Randomized Uncontrolled → Single-Arm Trial, Dose-Escalation Study
+  Quasi-Experimental → Interrupted Time Series, Uncontrolled Before-After, Difference-in-Differences, Regression Discontinuity
+  Qualitative & Mixed Methods → Qualitative Research, Mixed Methods
+
+Observational Studies:
+  Descriptive → Case Report / Series, Cross-Sectional (Descriptive), Ecological Study
+  Analytical → Case-Control, Cohort Study, Cross-Sectional (Analytical), Self-Controlled Case Series, Case-Crossover, Mendelian Randomization
+  Diagnostic / Prognostic → Diagnostic Accuracy, Prognostic Factor Study, Prediction Model Study
+
+Evidence Synthesis:
+  Reviews → SR without Meta-Analysis, SR with Meta-Analysis, Umbrella Review, Network Meta-Analysis, Scoping Review, Narrative Review
+
+Guidance / Consensus:
+  Guidelines & Consensus → Guideline / Consensus
+
+Economic & Decision Models:
+  Economic Evaluation → Economic Evaluation
+""".strip()
+
+
+def _build_classify_prompt() -> str:
+    return f"""You are a clinical research methodologist. Read this PDF and classify it using the taxonomy below.
+
+Return ONLY a valid JSON object with exactly these three keys:
+- "major_category": one of the major category names
+- "subcategory": the subcategory within that major category
+- "study_type": the specific study type
+
+Taxonomy:
+{_TAXONOMY}
+
+Rules:
+- Choose the single best-fitting classification based on the study design described in the paper.
+- If the paper explicitly states its design, use that as your primary signal.
+- If uncertain between two options, choose the more specific one.
+- Return ONLY the JSON object — no explanation, no markdown fences.
+
+Example output:
+{{"major_category": "Primary Studies", "subcategory": "Randomized Controlled", "study_type": "Randomized Controlled Trial"}}"""
+
+
 def _build_prefill_prompt(study_type: str) -> str:
     all_ids    = UNIVERSAL_IDS + TYPE_FIELD_IDS.get(study_type, [])
     field_list = "\n".join(f"  - {f}" for f in all_ids)
@@ -202,3 +252,33 @@ async def prefill_fields(paper_id: int, body: PrefillRequest, ogai_session: str 
 
     result = await asyncio.to_thread(_call_anthropic, pdf_path.read_bytes(), _build_prefill_prompt(body.study_type))
     return result
+
+
+@router.post("/{paper_id}/classify")
+async def classify_study(paper_id: int, ogai_session: str | None = Cookie(default=None)):
+    """Classify the paper's study design: returns {major_category, subcategory, study_type}."""
+    user = require_user(ogai_session)
+    conn = get_db()
+    row  = conn.execute("SELECT sha256, user_id FROM papers WHERE rowid=?", (paper_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if row["user_id"] != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    sha, uid = row["sha256"], row["user_id"]
+    pdf_path = next(
+        (p for p in [PAPERS_DIR / f"{sha[:16]}_{uid}.pdf", PAPERS_DIR / f"{sha[:16]}.pdf"] if p.exists()),
+        None,
+    )
+    if not pdf_path:
+        raise HTTPException(status_code=404, detail="PDF missing from disk")
+
+    result = await asyncio.to_thread(_call_anthropic, pdf_path.read_bytes(), _build_classify_prompt())
+
+    # Validate the returned keys are within our taxonomy
+    allowed_keys = {"major_category", "subcategory", "study_type"}
+    filtered = {k: str(v) for k, v in result.items() if k in allowed_keys}
+    if "study_type" not in filtered:
+        raise HTTPException(status_code=502, detail=f"Classification response missing study_type: {result}")
+    return filtered
