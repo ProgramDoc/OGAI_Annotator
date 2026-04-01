@@ -588,6 +588,15 @@ html, body { height: 100%; overflow: hidden; font-family: 'IBM Plex Sans', sans-
         <select id="f-study_type" onchange="onStudyTypeChange()"><option value="">— select subcategory first —</option></select>
       </div>
 
+      <!-- AI classify inline button -->
+      <div id="classify-row" style="margin-bottom:10px;">
+        <button id="classify-btn" class="autofill-btn" onclick="classifyWithAI()"
+          style="background:#7c3aed;font-size:11px;padding:7px;" disabled>
+          ✦ Classify with AI
+        </button>
+        <div id="classify-status" style="font-size:10px;color:#5b21b6;margin-top:4px;display:none;"></div>
+      </div>
+
       <div class="field-row">
         <div class="field-label">Primacy Gate Adjudication</div>
         <div class="rule-grid">
@@ -1213,6 +1222,11 @@ function onStudyTypeChange() {
   }
 }
 
+function _updateClassifyBtn() {
+  const btn = document.getElementById('classify-btn');
+  if (btn) btn.disabled = !currentPaperId;
+}
+
 function updateTypeSpecific(studyType) {
   const sec = document.getElementById('type-specific-section');
   const container = document.getElementById('type-specific-fields');
@@ -1583,6 +1597,7 @@ async function loadPdf(paperId, filename) {
 
   // ── Step 3: Reset form ────────────────────────────────────────────────────
   resetForm();
+  _updateClassifyBtn();
   renderSidebar();
   document.getElementById('save-status').textContent = `loading…`;
 
@@ -1884,6 +1899,10 @@ function resetForm() {
   const afLoad = document.getElementById('autofill-loading');
   if (afLoad) afLoad.style.display = 'none';
 
+  // Reset classify button
+  const clStatus = document.getElementById('classify-status');
+  if (clStatus) { clStatus.textContent = ''; clStatus.style.display = 'none'; }
+
   // Reset action buttons
   ['confirm','correct','flag'].forEach(k => {
     const btn = document.getElementById('btn-' + k);
@@ -2171,6 +2190,61 @@ async function prefillFromPDF() {
   } finally {
     btn.disabled = false;
     loading.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI STUDY CLASSIFICATION
+// ═══════════════════════════════════════════════════════════════════════════
+async function classifyWithAI() {
+  if (!currentPaperId) return;
+
+  const btn    = document.getElementById('classify-btn');
+  const status = document.getElementById('classify-status');
+
+  btn.disabled = true;
+  btn.textContent = '✦ Classifying…';
+  status.textContent = 'Reading paper design… (~10–30 s)';
+  status.style.display = 'block';
+
+  try {
+    const res = await fetch(`/api/papers/${currentPaperId}/classify`, { method: 'POST' });
+    if (res.status === 401) { window.location.href = '/login'; return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      status.textContent = 'Classification failed: ' + (err.detail || `HTTP ${res.status}`);
+      return;
+    }
+
+    const { major_category, subcategory, study_type } = await res.json();
+
+    // Cascade-populate the three dropdowns
+    const majEl = document.getElementById('f-major_category');
+    if (majEl && major_category) {
+      majEl.value = major_category;
+      onMajorCatChange();
+    }
+
+    const subEl = document.getElementById('f-subcategory');
+    if (subEl && subcategory) {
+      subEl.value = subcategory;
+      onSubcatChange();
+    }
+
+    const stEl = document.getElementById('f-study_type');
+    if (stEl && study_type) {
+      stEl.value = study_type;
+      onStudyTypeChange();
+    }
+
+    status.textContent = `Classified as: ${study_type || '?'}`;
+    scheduleAutoSave();
+
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = !currentPaperId;
+    btn.textContent = '✦ Classify with AI';
   }
 }
 
