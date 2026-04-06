@@ -2,6 +2,8 @@
 Authentication routes: register, login, logout, session management, rate limiting.
 """
 
+import base64
+import hashlib
 import hmac
 import json
 import os
@@ -11,13 +13,13 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, HTTPException
+from fastapi import APIRouter, Cookie, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 
 from .config import (
     ADMIN_EMAIL, ADMIN_SECRET, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW,
-    SESSION_COOKIE, SESSION_DAYS,
+    SESSION_COOKIE, SESSION_DAYS, SSO_SECRET,
 )
 from .db import _ensure_admin_user, get_db
 from .passwords import hash_password, verify_password
@@ -216,3 +218,65 @@ def me(ogai_session: str | None = Cookie(default=None)):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
+
+
+# ─────────────────────────────────────────────
+# SSO callback (from TheRubricGenerator)
+# ─────────────────────────────────────────────
+# Note: this endpoint is mounted at /sso (not /api/auth/sso) — see main.py
+
+def sso_callback(token: str = Query("")) -> Response:
+    """Validate an SSO token from TheRubricGenerator, find or create the user,
+    set a session cookie, and redirect to the main app."""
+    if not SSO_SECRET:
+        raise HTTPException(500, "SSO is not configured on this server")
+    if not token or "." not in token:
+        raise HTTPException(400, "Invalid SSO token")
+
+    payload_b64, sig = token.rsplit(".", 1)
+
+    # Verify HMAC signature
+    expected_sig = hmac.new(SSO_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        raise HTTPException(401, "Invalid SSO token signature")
+
+    # Decode and parse payload
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+    except Exception:
+        raise HTTPException(400, "Malformed SSO token payload")
+
+    # Check expiry (60 second window)
+    ts = payload.get("ts", 0)
+    if abs(time.time() - ts) > 60:
+        raise HTTPException(401, "SSO token expired")
+
+    email = (payload.get("email") or "").strip().lower()
+    display_name = payload.get("display_name") or email
+    role = payload.get("role") or "reviewer"
+
+    if not email:
+        raise HTTPException(400, "SSO token missing email")
+
+    # Find or create user
+    conn = get_db()
+    row = conn.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+    if row:
+        user_id = row["id"]
+    else:
+        random_pw = secrets.token_hex(32)
+        ph, ps = hash_password(random_pw)
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO users (email, display_name, password_hash, password_salt, role) VALUES (?,?,?,?,?)",
+                (email, display_name, ph, ps, role),
+            )
+            user_id = cur.lastrowid
+            conn.commit()
+    conn.close()
+
+    # Create session and redirect
+    session_token = _create_session(user_id)
+    response = RedirectResponse("/", status_code=302)
+    _set_session_cookie(response, session_token)
+    return response

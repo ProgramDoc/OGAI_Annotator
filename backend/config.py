@@ -24,3 +24,7 @@ PBKDF2_ITERS   = 260_000
 # Rate limiting (auth endpoints)
 RATE_LIMIT_WINDOW = 60   # seconds
 RATE_LIMIT_MAX    = 10   # max attempts per IP per window
+
+# SSO with TheRubricGenerator
+SSO_SECRET    = os.environ.get("SSO_SECRET", "")
+RUBRICGEN_URL = os.environ.get("RUBRICGEN_URL", "https://therubricgenerator.onrender.com")

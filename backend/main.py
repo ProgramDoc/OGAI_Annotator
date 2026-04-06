@@ -7,7 +7,7 @@ from fastapi import Cookie, FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import get_user_from_token
+from .auth import get_user_from_token, sso_callback
 from .config import FRONTEND
 from .db import init_db
 
@@ -29,6 +29,12 @@ def root(ogai_session: str | None = Cookie(default=None)):
     if not user:
         return RedirectResponse("/login", status_code=302)
     return FileResponse(str(FRONTEND / "annotator.html"), media_type="text/html")
+
+
+@app.get("/sso", include_in_schema=False)
+def sso_page(token: str = ""):
+    """SSO callback from TheRubricGenerator — validates token and creates session."""
+    return sso_callback(token)
 
 
 @app.get("/login", include_in_schema=False)
